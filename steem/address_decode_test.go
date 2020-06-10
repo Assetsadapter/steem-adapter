@@ -17,10 +17,24 @@ package steem
 
 import (
 	"encoding/hex"
+	"fmt"
 	"testing"
+
+	"github.com/blocktree/go-owcdrivers/addressEncoder"
 
 	"github.com/Assetsadapter/steem-adapter/addrdec"
 )
+
+func TestAddressDecoder_PrivateKeyToWIF(t *testing.T) {
+	addrdec.Default.IsTestNet = false
+	privKey, _ := hex.DecodeString("9f242fcfaaef51843f960e90e46806d7719a91c38f2c376f85d408a453849438")
+	wif := addressEncoder.AddressEncode(privKey, STM_mainnetPrivateWIFCompressed)
+	//wif, err := addressDecoder{}.PrivateKeyToWIF(privKey, false)
+	//if err != nil {
+	//	t.Logf("PrivateKeyToWIF failed : %s", err.Error())
+	//}
+	fmt.Println(wif)
+}
 
 func TestAddressDecoder_AddressEncode(t *testing.T) {
 	addrdec.Default.IsTestNet = false

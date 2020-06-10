@@ -1,19 +1,18 @@
 package types
 
 type Account struct {
-	ID                            ObjectID   `json:"id"`
-	MembershipExpirationDate      Time       `json:"membership_expiration_date"`
-	Registrar                     ObjectID   `json:"registrar"`
-	Referrer                      ObjectID   `json:"referrer"`
-	LifetimeReferrer              ObjectID   `json:"lifetime_referrer"`
-	NetworkFeePercentage          uint32     `json:"network_fee_percentage"`
-	LifetimeReferrerFeePercentage uint32     `json:"lifetime_referrer_fee_percentage"`
-	ReferrerRewardsPercentage     uint32     `json:"referrer_rewards_percentage"`
-	Name                          string     `json:"name"`
-	Statistics                    string     `json:"statistics"`
-	Options                       Options    `json:"options"`
-	Owner                         Permission `json:"owner"`
-	Active                        Permission `json:"active"`
+	Id                int        `json:"id"`
+	Name              string     `json:"name"`
+	Owner             Permission `json:"owner"`
+	Active            Permission `json:"active"`
+	Posting           Permission `json:"posting"`
+	MemoKey           string     `json:"memo_key"`
+	JsonMetadata      string     `json:"json_metadata"`
+	Balance           string     `json:"balance"`
+	SavingsBalance    string     `json:"savings_balance"`
+	SbdBalance        string     `json:"sbd_balance"`
+	SavingsSbdBalance string     `json:"savings_sbd_balance"`
+	RewardSbdBalance  string     `json:"reward_sbd_balance"`
 }
 
 type Permission struct {

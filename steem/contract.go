@@ -16,9 +16,9 @@
 package steem
 
 import (
-	"github.com/Assetsadapter/steem-adapter/types"
+	"strings"
+
 	"github.com/blocktree/openwallet/openwallet"
-	"github.com/shopspring/decimal"
 )
 
 type ContractDecoder struct {
@@ -36,47 +36,67 @@ func NewContractDecoder(wm *WalletManager) *ContractDecoder {
 // GetTokenBalanceByAddress return the balance by account alias, queried by rpc
 func (decoder *ContractDecoder) GetTokenBalanceByAddress(contract openwallet.SmartContract, address ...string) ([]*openwallet.TokenBalance, error) {
 
-	var (
-		asset = types.MustParseObjectID(contract.Address)
-	)
+	//var (
+	//	asset = types.MustParseObjectID(contract.Address)
+	//)
 	tokenBalanceList := make([]*openwallet.TokenBalance, 0)
 
-	for _, addr := range address {
+	accounts, err := decoder.wm.Api.GetAccounts(address...)
+	if err != nil {
+		decoder.wm.Log.Errorf("get accounts failed, err : %s", err.Error())
+		return nil, err
+	}
 
-		account, err := decoder.wm.Api.GetAccountID(addr)
-		if err != nil {
-			decoder.wm.Log.Errorf("get account[%v] id failed, err: %v", addr, err)
-		}
-
-		if account == nil {
-			return nil, err
-		}
-
-		balance, err := decoder.wm.Api.GetAssetsBalance(*account, asset)
-		if err != nil {
-			decoder.wm.Log.Errorf("get account[%v] token balance failed, err: %v", addr, err)
-		}
-
-		if balance == nil {
-			return nil, err
-		}
-
-		balanceDec, _ := decimal.NewFromString(balance.Amount)
-		balanceDec = balanceDec.Shift(0 - int32(contract.Decimals))
-
-		tokenBalance := &openwallet.TokenBalance{
+	for _, account := range accounts {
+		balance := strings.Split(account.Balance, " ")
+		tokenBalanceList = append(tokenBalanceList, &openwallet.TokenBalance{
 			Contract: &contract,
 			Balance: &openwallet.Balance{
-				Address:          addr,
+				Address:          account.Name,
 				Symbol:           contract.Symbol,
-				Balance:          balanceDec.String(),
-				ConfirmBalance:   balanceDec.String(),
+				Balance:          balance[0],
+				ConfirmBalance:   balance[0],
 				UnconfirmBalance: "0",
 			},
-		}
-
-		tokenBalanceList = append(tokenBalanceList, tokenBalance)
+		})
 	}
+
+	//for _, addr := range address {
+	//
+	//	account, err := decoder.wm.Api.GetAccountID(addr)
+	//	if err != nil {
+	//		decoder.wm.Log.Errorf("get account[%v] id failed, err: %v", addr, err)
+	//	}
+	//
+	//	if account == nil {
+	//		return nil, err
+	//	}
+	//
+	//	balance, err := decoder.wm.Api.GetAssetsBalance(*account, asset)
+	//	if err != nil {
+	//		decoder.wm.Log.Errorf("get account[%v] token balance failed, err: %v", addr, err)
+	//	}
+	//
+	//	if balance == nil {
+	//		return nil, err
+	//	}
+	//
+	//	balanceDec, _ := decimal.NewFromString(balance.Amount)
+	//	balanceDec = balanceDec.Shift(0 - int32(contract.Decimals))
+	//
+	//	tokenBalance := &openwallet.TokenBalance{
+	//		Contract: &contract,
+	//		Balance: &openwallet.Balance{
+	//			Address:          addr,
+	//			Symbol:           contract.Symbol,
+	//			Balance:          balanceDec.String(),
+	//			ConfirmBalance:   balanceDec.String(),
+	//			UnconfirmBalance: "0",
+	//		},
+	//	}
+	//
+	//	tokenBalanceList = append(tokenBalanceList, tokenBalance)
+	//}
 
 	return tokenBalanceList, nil
 

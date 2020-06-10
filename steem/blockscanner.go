@@ -18,12 +18,10 @@ package steem
 import (
 	"errors"
 	"fmt"
-	"github.com/shopspring/decimal"
-	"math/big"
-	"strconv"
 	"time"
 
-	"github.com/Assetsadapter/steem-adapter/encoding"
+	"github.com/shopspring/decimal"
+
 	"github.com/Assetsadapter/steem-adapter/types"
 	"github.com/blocktree/openwallet/common"
 	"github.com/blocktree/openwallet/log"
@@ -342,60 +340,60 @@ func (bs *BtsBlockScanner) ExtractTransaction(blockHeight uint64, blockHash stri
 		bs.wm.Log.Std.Debug("transaction does not have operation: (sig) %s", transaction.Signatures)
 		return ExtractResult{Success: true}
 	}
-	for _, operation := range transaction.Operations {
+	for _, transferOperation := range transaction.Operations {
 
-		if transferOperation, ok := operation.(*types.TransferOperation); ok {
+		//if transferOperation, ok := operation.(*types.TransferOperation); ok {
 
-			txID := transaction.TransactionID
-			if len(txID) == 0 {
-				txID, err := bs.wm.Api.GetTransactionID(transaction)
-				bs.wm.Log.Std.Debug("tx: %v", txID)
+		txID := transaction.TransactionID
+		if len(txID) == 0 {
+			txID, err := bs.wm.Api.GetTransactionID(transaction)
+			bs.wm.Log.Std.Debug("tx: %v", txID)
 
-				if err != nil || len(txID) == 0 {
-					bs.wm.Log.Std.Error("cannot get txid, block: %v %s \n%v", blockHeight, transaction.Signatures, err)
-					return ExtractResult{Success: false}
-				}
-			}
-			result.TxID = txID
-
-			if scanTargetFunc == nil {
-				bs.wm.Log.Std.Error("scanTargetFunc is not configurated")
+			if err != nil || len(txID) == 0 {
+				bs.wm.Log.Std.Error("cannot get txid, block: %v %s \n%v", blockHeight, transaction.Signatures, err)
 				return ExtractResult{Success: false}
 			}
-
-			accounts, err := bs.wm.Api.GetAccounts(transferOperation.From, transferOperation.To)
-			if len(accounts) != 2 {
-				bs.wm.Log.Std.Error("cannot get accounts, block: %v %s \n%v", blockHeight, txID, err)
-				return ExtractResult{Success: false}
-			}
-			from := accounts[0]
-			to := accounts[1]
-
-			//订阅地址为交易单中的发送者
-			accountID1, ok1 := scanTargetFunc(openwallet.ScanTarget{Alias: from.Name, Symbol: bs.wm.Symbol(), BalanceModelType: openwallet.BalanceModelTypeAccount})
-			//订阅地址为交易单中的接收者
-			accountID2, ok2 := scanTargetFunc(openwallet.ScanTarget{Alias: to.Name, Symbol: bs.wm.Symbol(), BalanceModelType: openwallet.BalanceModelTypeAccount})
-			if accountID1 == accountID2 && len(accountID1) > 0 && len(accountID2) > 0 {
-				bs.InitExtractResult(accountID1, transferOperation, &result, 0)
-			} else {
-				if ok1 {
-					bs.InitExtractResult(accountID1, transferOperation, &result, 1)
-				}
-
-				if ok2 {
-					bs.InitExtractResult(accountID2, transferOperation, &result, 2)
-				}
-			}
-
 		}
+		result.TxID = txID
+
+		if scanTargetFunc == nil {
+			bs.wm.Log.Std.Error("scanTargetFunc is not configurated")
+			return ExtractResult{Success: false}
+		}
+
+		accounts, err := bs.wm.Api.GetAccounts(transferOperation.Value.From, transferOperation.Value.To)
+		if len(accounts) != 2 {
+			bs.wm.Log.Std.Error("cannot get accounts, block: %v %s \n%v", blockHeight, txID, err)
+			return ExtractResult{Success: false}
+		}
+		from := accounts[0]
+		to := accounts[1]
+
+		//订阅地址为交易单中的发送者
+		accountID1, ok1 := scanTargetFunc(openwallet.ScanTarget{Alias: from.Name, Symbol: bs.wm.Symbol(), BalanceModelType: openwallet.BalanceModelTypeAccount})
+		//订阅地址为交易单中的接收者
+		accountID2, ok2 := scanTargetFunc(openwallet.ScanTarget{Alias: to.Name, Symbol: bs.wm.Symbol(), BalanceModelType: openwallet.BalanceModelTypeAccount})
+		if accountID1 == accountID2 && len(accountID1) > 0 && len(accountID2) > 0 {
+			bs.InitExtractResult(accountID1, transferOperation, &result, 0)
+		} else {
+			if ok1 {
+				bs.InitExtractResult(accountID1, transferOperation, &result, 1)
+			}
+
+			if ok2 {
+				bs.InitExtractResult(accountID2, transferOperation, &result, 2)
+			}
+		}
+
 	}
+	//}
 	result.Success = success
 	return result
 
 }
 
 //InitExtractResult optType = 0: 输入输出提取，1: 输入提取，2：输出提取
-func (bs *BtsBlockScanner) InitExtractResult(sourceKey string, operation *types.TransferOperation, result *ExtractResult, optType int64) {
+func (bs *BtsBlockScanner) InitExtractResult(sourceKey string, operation *types.Op, result *ExtractResult, optType int64) {
 
 	txExtractDataArray := result.extractData[sourceKey]
 	if txExtractDataArray == nil {
@@ -407,23 +405,23 @@ func (bs *BtsBlockScanner) InitExtractResult(sourceKey string, operation *types.
 	status := "1"
 	reason := ""
 
-	token := operation.Amount.AssetID.String()
-	amount,_ := decimal.NewFromString(common.NewString(operation.Amount.Amount).String())
+	token := operation.Value.Amount.Nai
+	amount, _ := decimal.NewFromString(common.NewString(operation.Value.Amount.Amount).String())
 	transferFee := decimal.Zero
-	if operation.Fee.AssetID.String() == "1.3.0" {
-		transferFee, _ = decimal.NewFromString(common.NewString(operation.Fee.Amount).String())
-		transferFee = transferFee.Div(decimal.New(1,5))
-	}
+	//if operation.Fee.AssetID.String() == "1.3.0" {
+	//	transferFee, _ = decimal.NewFromString(common.NewString(operation.Value.Fee.Amount).String())
+	//	transferFee = transferFee.Div(decimal.New(1, 5))
+	//}
 	contractID := openwallet.GenContractID(bs.wm.Symbol(), token)
 	var coin openwallet.Coin
 	//BTS 资产 assetsId 1.3.0
-	if token=="1.3.0" {
-		amount = amount.Div(decimal.New(1,5))
+	if token == SteemNai {
+		amount = amount.Div(decimal.New(1, 5))
 		coin = openwallet.Coin{
 			Symbol:     bs.wm.Symbol(),
 			IsContract: false,
 		}
-	}else {//其它资产
+	} else { //其它资产
 		coin = openwallet.Coin{
 			Symbol:     bs.wm.Symbol(),
 			IsContract: true,
@@ -437,23 +435,23 @@ func (bs *BtsBlockScanner) InitExtractResult(sourceKey string, operation *types.
 		}
 	}
 
-	accounts, err := bs.wm.Api.GetAccounts(operation.From.String(), operation.To.String())
+	accounts, err := bs.wm.Api.GetAccounts(operation.Value.From, operation.Value.To)
 	if len(accounts) != 2 {
-		bs.wm.Log.Std.Error("cannot get accounts, %s %s \n %v", operation.From.String(), operation.To.String(), err)
+		bs.wm.Log.Std.Error("cannot get accounts, %s %s \n %v", operation.Value.From, operation.Value.To, err)
 		return
 	}
 	from := accounts[0]
 	to := accounts[1]
-	var memoText =""
+	var memoText = operation.Value.Memo
 	//如果交易有memo,解密加密的memo Message
-	if len(operation.Memo.Message)>0{
-		nonce, _ := strconv.ParseUint(operation.Memo.Nonce,10,64)
-		memoText,err=encoding.Decrypt(operation.Memo.Message.String(),from.Options.MemoKey,to.Options.MemoKey,nonce,bs.wm.Config.MemoPrivateKey)
-		if err !=nil{
-			bs.wm.Log.Std.Error("cannot get transaction memo, txId=%s  \n err= %v", result.TxID, err)
-
-		}
-	}
+	//if len(operation.Memo.Message) > 0 {
+	//	nonce, _ := strconv.ParseUint(operation.Value.Memo.Nonce, 10, 64)
+	//	memoText, err = encoding.Decrypt(operation.Memo.Message.String(), from.Options.MemoKey, to.Options.MemoKey, nonce, bs.wm.Config.MemoPrivateKey)
+	//	if err != nil {
+	//		bs.wm.Log.Std.Error("cannot get transaction memo, txId=%s  \n err= %v", result.TxID, err)
+	//
+	//	}
+	//}
 	transx := &openwallet.Transaction{
 		Fees:        transferFee.String(),
 		Coin:        coin,
@@ -466,13 +464,13 @@ func (bs *BtsBlockScanner) InitExtractResult(sourceKey string, operation *types.
 		From:        []string{from.Name + ":" + amount.String()},
 		To:          []string{to.Name + ":" + amount.String()},
 		IsMemo:      true,
-		Memo:		 memoText,
+		Memo:        memoText,
 		Status:      status,
 		Reason:      reason,
 		TxType:      0,
 	}
 
-	transx.SetExtParam("memo", operation.Memo)
+	transx.SetExtParam("memo", operation.Value.Memo)
 
 	wxID := openwallet.GenTransactionWxID(transx)
 	transx.WxID = wxID
@@ -489,61 +487,61 @@ func (bs *BtsBlockScanner) InitExtractResult(sourceKey string, operation *types.
 
 	txExtractDataArray = append(txExtractDataArray, txExtractData)
 
-	if operation.Fee.AssetID != operation.Amount.AssetID && optType != 2 {
-		fee := common.NewString(operation.Fee.Amount).String()
-		feeToken := operation.Fee.AssetID.String()
-
-		contractID := openwallet.GenContractID(bs.wm.Symbol(), feeToken)
-		feeCoin := openwallet.Coin{
-			Symbol:     bs.wm.Symbol(),
-			IsContract: true,
-			ContractID: contractID,
-		}
-
-		feeCoin.Contract = openwallet.SmartContract{
-			Symbol:     bs.wm.Symbol(),
-			ContractID: contractID,
-			Address:    feeToken,
-			Token:      feeToken,
-		}
-
-		feeTransx := &openwallet.Transaction{
-			Fees:        "0",
-			Coin:        feeCoin,
-			BlockHash:   result.BlockHash,
-			BlockHeight: result.BlockHeight,
-			TxID:        result.TxID,
-			// Decimal:     0,
-			Amount:      fee,
-			ConfirmTime: result.BlockTime,
-			From:        []string{from.Name + ":" + fee},
-			IsMemo:      true,
-			Status:      status,
-			Reason:      reason,
-			TxType:      1,
-		}
-
-		wxID := openwallet.GenTransactionWxID(feeTransx)
-		feeTransx.WxID = wxID
-
-		feeExtractData := &openwallet.TxExtractData{Transaction: feeTransx}
-		bs.extractTxInput(operation, feeExtractData)
-
-		txExtractDataArray = append(txExtractDataArray, feeExtractData)
-	}
+	//if operation.Value.Fee.AssetID != operation.Value.Amount.Nai && optType != 2 {
+	//	fee := common.NewString(operation.Fee.Amount).String()
+	//	feeToken := operation.Fee.AssetID.String()
+	//
+	//	contractID := openwallet.GenContractID(bs.wm.Symbol(), feeToken)
+	//	feeCoin := openwallet.Coin{
+	//		Symbol:     bs.wm.Symbol(),
+	//		IsContract: true,
+	//		ContractID: contractID,
+	//	}
+	//
+	//	feeCoin.Contract = openwallet.SmartContract{
+	//		Symbol:     bs.wm.Symbol(),
+	//		ContractID: contractID,
+	//		Address:    feeToken,
+	//		Token:      feeToken,
+	//	}
+	//
+	//	feeTransx := &openwallet.Transaction{
+	//		Fees:        "0",
+	//		Coin:        feeCoin,
+	//		BlockHash:   result.BlockHash,
+	//		BlockHeight: result.BlockHeight,
+	//		TxID:        result.TxID,
+	//		// Decimal:     0,
+	//		Amount:      fee,
+	//		ConfirmTime: result.BlockTime,
+	//		From:        []string{from.Name + ":" + fee},
+	//		IsMemo:      true,
+	//		Status:      status,
+	//		Reason:      reason,
+	//		TxType:      1,
+	//	}
+	//
+	//	wxID := openwallet.GenTransactionWxID(feeTransx)
+	//	feeTransx.WxID = wxID
+	//
+	//	feeExtractData := &openwallet.TxExtractData{Transaction: feeTransx}
+	//	bs.extractTxInput(operation, feeExtractData)
+	//
+	//	txExtractDataArray = append(txExtractDataArray, feeExtractData)
+	//}
 
 	result.extractData[sourceKey] = txExtractDataArray
 }
 
 //extractTxInput 提取交易单输入部分,无需手续费，所以只包含1个TxInput
-func (bs *BtsBlockScanner) extractTxInput(operation *types.TransferOperation, txExtractData *openwallet.TxExtractData) {
+func (bs *BtsBlockScanner) extractTxInput(operation *types.Op, txExtractData *openwallet.TxExtractData) {
 
 	tx := txExtractData.Transaction
 	coin := openwallet.Coin(tx.Coin)
 
-	accounts, err := bs.wm.Api.GetAccounts(operation.From.String())
+	accounts, err := bs.wm.Api.GetAccounts(operation.Value.From)
 	if len(accounts) != 1 {
-		bs.wm.Log.Std.Error("cannot get accounts, %s \n %v", operation.From.String(), err)
+		bs.wm.Log.Std.Error("cannot get accounts, %s \n %v", operation.Value.From, err)
 		return
 	}
 	from := accounts[0]
@@ -565,28 +563,28 @@ func (bs *BtsBlockScanner) extractTxInput(operation *types.TransferOperation, tx
 	txInput.Recharge.TxType = tx.TxType
 	txExtractData.TxInputs = append(txExtractData.TxInputs, txInput)
 
-	if tx.TxType == 0 && operation.Fee.Amount > 0 && operation.Fee.AssetID == operation.Amount.AssetID {
-		//手续费也作为一个输出s
-		fee := new(big.Int)
-		fee.SetUint64(operation.Fee.Amount)
-		tmp := *txInput
-		feeCharge := &tmp
-		feeCharge.Amount = fee.String()
-		feeCharge.TxType = 1
-		txExtractData.TxInputs = append(txExtractData.TxInputs, feeCharge)
-	}
+	//if tx.TxType == 0 && operation.Fee.Amount > 0 && operation.Fee.AssetID == operation.Amount.AssetID {
+	//	//手续费也作为一个输出s
+	//	fee := new(big.Int)
+	//	fee.SetUint64(operation.Fee.Amount)
+	//	tmp := *txInput
+	//	feeCharge := &tmp
+	//	feeCharge.Amount = fee.String()
+	//	feeCharge.TxType = 1
+	//	txExtractData.TxInputs = append(txExtractData.TxInputs, feeCharge)
+	//}
 
 }
 
 //extractTxOutput 提取交易单输入部分,只有一个TxOutPut
-func (bs *BtsBlockScanner) extractTxOutput(operation *types.TransferOperation, txExtractData *openwallet.TxExtractData) {
+func (bs *BtsBlockScanner) extractTxOutput(operation *types.Op, txExtractData *openwallet.TxExtractData) {
 
 	tx := txExtractData.Transaction
 	coin := openwallet.Coin(tx.Coin)
 
-	accounts, err := bs.wm.Api.GetAccounts(operation.To.String())
+	accounts, err := bs.wm.Api.GetAccounts(operation.Value.To)
 	if len(accounts) != 1 {
-		bs.wm.Log.Std.Error("cannot get accounts, %s \n %v", operation.To.String(), err)
+		bs.wm.Log.Std.Error("cannot get accounts, %s \n %v", operation.Value.To, err)
 		return
 	}
 	to := accounts[0]
@@ -609,7 +607,9 @@ func (bs *BtsBlockScanner) extractTxOutput(operation *types.TransferOperation, t
 }
 
 //newExtractDataNotify 发送通知
-func (bs *BtsBlockScanner) newExtractDataNotify(height uint64, extractData map[string][]*openwallet.TxExtractData) error {
+func (bs *BtsBlockScanner) newExtractDataNotify(
+	height uint64,
+	extractData map[string][]*openwallet.TxExtractData) error {
 	for o := range bs.Observers {
 		for key, array := range extractData {
 			for _, item := range array {
@@ -732,18 +732,18 @@ func (bs *BtsBlockScanner) GetBalanceByAddress(address ...string) ([]*openwallet
 
 	addrBalanceArr := make([]*openwallet.Balance, 0)
 	var contract = openwallet.SmartContract{
-		Address:"1.3.0",
-		Token:"BTS",
-		Decimals:5,
+		Address:  "1.3.0",
+		Token:    "BTS",
+		Decimals: 5,
 	}
-	tokenBalances,err:=bs.wm.ContractDecoder.GetTokenBalanceByAddress(contract,address...)
-	if err !=nil{
-		return nil,err
+	tokenBalances, err := bs.wm.ContractDecoder.GetTokenBalanceByAddress(contract, address...)
+	if err != nil {
+		return nil, err
 	}
-	for _,token := range tokenBalances {
-		balanceAmount,_ := decimal.NewFromString(token.Balance.Balance)
+	for _, token := range tokenBalances {
+		balanceAmount, _ := decimal.NewFromString(token.Balance.Balance)
 
-		var  balance = openwallet.Balance{Symbol:bs.wm.Config.Symbol,Balance:balanceAmount.String()}
+		var balance = openwallet.Balance{Symbol: bs.wm.Config.Symbol, Balance: balanceAmount.String()}
 		addrBalanceArr = append(addrBalanceArr, &balance)
 	}
 

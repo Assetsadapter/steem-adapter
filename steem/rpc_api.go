@@ -267,7 +267,7 @@ func (c *WalletClient) GetAccountID(name string) (*types.ObjectID, error) {
 // GetAssetsBalance Returns information about the given account.
 func (c *WalletClient) GetAccounts(names_or_ids ...string) ([]*types.Account, error) {
 	var resp []*types.Account
-	r, err := c.call("get_accounts", []interface{}{names_or_ids}, false, false)
+	r, err := c.call("condenser_api.get_accounts", []interface{}{names_or_ids}, false, false)
 	if err != nil {
 		return nil, err
 	}

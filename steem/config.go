@@ -26,6 +26,10 @@ import (
 const (
 	CurveType = owcrypt.ECC_CURVE_SECP256K1
 
+	// 链上各币的operation_type
+	SteemNai = "@@000000021"
+	SBDNai   = "@@000000013"
+	VestsNai = "@@000000037"
 	//默认配置内容
 	defaultConfig = `
 

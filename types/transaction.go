@@ -7,39 +7,57 @@ import (
 
 /*
 {
-	"ref_block_num": 90,
-	"ref_block_prefix": 1997317362,
-	"expiration": "2020-04-07T02:45:51",
-	"operations": [
-		{
-			"type": "transfer_operation",
-			"value": {
-				"from": "initminer",
-				"to": "leor",
-				"amount": {
-					"amount": "1",
-					"precision": 3,
-					"nai": "@@000000013"
-				},
-				"memo": "test cli_wallet"
-			}
-		}
-	],
-	"extensions": [],
-	"signatures": [
-		"1f68b0915353ef12aa77697849f538d488d1d27fc9eee123ce32744c487b71e3e44ba3027f8cde7ab90a4aecf58cf37b506f2196e0de5d90dd6b93c607ccccc361"
-	]
+    "ref_block_num": 43371,
+    "ref_block_prefix": 879685531,
+    "expiration": "2020-06-05T06:25:06",
+    "operations": [
+        {
+            "type": "transfer_operation",
+            "value": {
+                "from": "initminer",
+                "to": "leor",
+                "amount": {
+                    "amount": "1000",
+                    "precision": 3,
+                    "nai": "@@000000013"
+                },
+                "memo": "990909"
+            }
+        }
+    ],
+    "extensions": [],
+    "signatures": [
+        "1f611f7bab3df325cfec4273b9fb56ad56f069cd325c2c35bc5e500416405d7cf85873b32793d11743dfd378fe9e1449e4e72b0215efa9645eda4937e0cdde98c2"
+    ]
 }
 */
 
 type Transaction struct {
-	RefBlockNum    uint16     `json:"ref_block_num"`
-	RefBlockPrefix uint32     `json:"ref_block_prefix"`
-	Expiration     Time       `json:"expiration"`
-	Operations     Operations `json:"operations"`
-	Signatures     []string   `json:"signatures"`
-	Extensions     []string   `json:"extensions"`
+	RefBlockNum    uint16   `json:"ref_block_num"`
+	RefBlockPrefix uint32   `json:"ref_block_prefix"`
+	Expiration     Time     `json:"expiration"`
+	Operations     []*Op    `json:"operations"`
+	Signatures     []string `json:"signatures"`
+	Extensions     []string `json:"extensions"`
 	TransactionID  string
+}
+
+type Op struct {
+	Type  string `json:"type"`
+	Value V      `json:"value"`
+}
+
+type V struct {
+	From   string `json:"from"`
+	To     string `json:"to"`
+	Amount Amount `json:"amount"`
+	Memo   string `json:"memo"`
+}
+
+type Amount struct {
+	Amount    string `json:"amount"`
+	Precision int    `json:"precision"`
+	Nai       string `json:"nai"`
 }
 
 // Marshal implements encoding.Marshaller interface.
@@ -65,6 +83,6 @@ func (tx *Transaction) Marshal(encoder *encoding.Encoder) error {
 }
 
 // PushOperation can be used to add an operation into the encoding.
-func (tx *Transaction) PushOperation(op Operation) {
-	tx.Operations = append(tx.Operations, op)
+func (tx *Transaction) PushOperation(op Op) {
+	tx.Operations = append(tx.Operations, &op)
 }

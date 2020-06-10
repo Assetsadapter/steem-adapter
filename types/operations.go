@@ -122,18 +122,45 @@ type UnknownOperation struct {
 func (op *UnknownOperation) Type() OpType { return op.kind }
 
 // NewTransferOperation returns a new instance of TransferOperation
-func NewTransferOperation(from, to string, amount, fee AssetAmount) *TransferOperation {
+func NewTransferOperation(from, to, amount string, fee AssetAmount) *TransferOperation {
 	op := &TransferOperation{
-		From:   from,
-		To:     to,
-		Amount: amount,
+		Value{
+			From: from,
+			To:   to,
+			Amount: AssetAmount{
+				//Amount:    amount,
+				Precision: 3,
+				Nai:       "",
+			},
+			Memo: "",
+		},
 	}
 
 	return op
 }
 
+/*
+{
+    "type": "transfer_operation",
+    "value": {
+        "from": "initminer",
+        "to": "leor",
+        "amount": {
+            "amount": "1000",
+            "precision": 3,
+            "nai": "@@000000013"
+        },
+        "memo": "990909"
+    }
+}
+*/
+
 // TransferOperation
 type TransferOperation struct {
+	Value Value `json:"value"`
+}
+
+type Value struct {
 	From   string      `json:"from"`
 	To     string      `json:"to"`
 	Amount AssetAmount `json:"amount"`
@@ -202,10 +229,10 @@ func (op *TransferOperation) Marshal(encoder *encoding.Encoder) error {
 	enc := encoding.NewRollingEncoder(encoder)
 
 	enc.EncodeUVarint(uint64(op.Type()))
-	enc.Encode(op.From)
-	enc.Encode(op.To)
-	enc.Encode(op.Amount)
-	enc.Encode(op.Memo)
+	enc.Encode(op.Value.From)
+	enc.Encode(op.Value.To)
+	enc.Encode(op.Value.Amount)
+	enc.Encode(op.Value.Memo)
 
 	//Memo?
 	// enc.EncodeUVarint(0)
