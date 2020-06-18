@@ -54,17 +54,17 @@ func (decoder *TransactionDecoder) CreateRawTransaction(wrapper openwallet.Walle
 		accountID = rawTx.Account.AccountID
 		amountStr string
 		to        string
-		assetID   types.ObjectID
-		precise   uint64
+		//assetID   types.ObjectID
+		precise uint64
 	)
 
 	if rawTx.Coin.IsContract {
 		assetID = types.MustParseObjectID(rawTx.Coin.Contract.Address)
 		precise = rawTx.Coin.Contract.Decimals
 	} else {
-		assetID = types.MustParseObjectID("1.3.0")
-		precise = 5
-		rawTx.Coin.Contract.Address = "1.3.0"
+		assetID = types.MustParseObjectID(SteemNai)
+		precise = 3
+		rawTx.Coin.Contract.Address = SteemNai
 	}
 
 	//获取wallet
@@ -84,15 +84,20 @@ func (decoder *TransactionDecoder) CreateRawTransaction(wrapper openwallet.Walle
 	}
 
 	// 检查转出、目标账户是否存在
-	accounts, err := decoder.wm.Api.GetAccounts(account.Alias, to)
+
+	accounts, err := decoder.wm.Api.GetAccounts(account.Alias)
+	if err != nil {
+		return openwallet.Errorf(openwallet.ErrAccountNotAddress, "accounts have not registered [%v]", err)
+	}
+	fromAccount := accounts[0]
+
+	accounts, err = decoder.wm.Api.GetAccounts(to)
 	if err != nil {
 		return openwallet.Errorf(openwallet.ErrAccountNotAddress, "accounts have not registered [%v] ", err)
 	}
+	toAccount := accounts[0]
 
-	fromAccount := accounts[0]
-	toAccount := accounts[1]
-
-	//// 检查转出账户余额
+	// 检查转出账户余额
 	//balance, err := decoder.wm.Api.GetAssetsBalance(fromAccount.Id, assetID)
 	//if err != nil || balance == nil {
 	//	return openwallet.Errorf(openwallet.ErrInsufficientBalanceOfAccount, "all address's balance of account is not enough")
@@ -108,53 +113,53 @@ func (decoder *TransactionDecoder) CreateRawTransaction(wrapper openwallet.Walle
 
 	memo := rawTx.GetExtParam().Get("memo").String()
 
-	asset := bt.AssetIDFromObject(bt.NewAssetID(assetID.String()))
-	amount := bt.AssetAmount{
-		Asset:  asset,
-		Amount: bt.Int64(amountDec.IntPart()),
-	}
+	//asset := bt.AssetIDFromObject(bt.NewAssetID(assetID.String()))
+	//amount := bt.Amount{
+	//	Asset:  asset,
+	//	Amount: bt.Int64(amountDec.IntPart()),
+	//}
 
 	op := operations.TransferOperation{
 		Amount:     amount,
 		Extensions: bt.Extensions{},
-		//From:       bt.AccountIDFromObject(bt.NewAccountID(fromAccount.Id)),
-		//To:         bt.AccountIDFromObject(bt.NewAccountID(toAccount.Id)),
+		From:       bt.AccountIDFromObject(bt.NewAccountID(fromAccount.Id)),
+		To:         bt.AccountIDFromObject(bt.NewAccountID(toAccount.Id)),
 	}
 
-	fromPublicKey, _ := bt.NewPublicKeyFromString(fromAccount.MemoKey)
-	toPublicKey, _ := bt.NewPublicKeyFromString(toAccount.MemoKey)
+	//fromPublicKey, _ := bt.NewPublicKeyFromString(fromAccount.MemoKey)
+	//toPublicKey, _ := bt.NewPublicKeyFromString(toAccount.MemoKey)
+	//
+	//if memo != "" {
+	//	m := bt.Memo{
+	//		From:  *fromPublicKey,
+	//		To:    *toPublicKey,
+	//		Nonce: bt.UInt64(rand.Uint64()),
+	//	}
+	//	keyBag := crypto.NewKeyBag()
+	//	keyBag.Add(decoder.wm.Config.MemoPrivateKey)
+	//
+	//	if err := keyBag.EncryptMemo(&m, memo); err != nil {
+	//		return fmt.Errorf("EncryptMemo: %v", err)
+	//	}
+	//
+	//	op.Memo = &m
+	//}
 
-	if memo != "" {
-		m := bt.Memo{
-			From:  *fromPublicKey,
-			To:    *toPublicKey,
-			Nonce: bt.UInt64(rand.Uint64()),
-		}
-		keyBag := crypto.NewKeyBag()
-		keyBag.Add(decoder.wm.Config.MemoPrivateKey)
+	//ops := &bt.Operations{&op}
+	//operations := bt.Operations(*ops)
+	//fees, err := decoder.wm.Api.GetRequiredFee(operations, assetID.String())
+	//if err != nil {
+	//	return openwallet.Errorf(openwallet.ErrCreateRawTransactionFailed, "can't get fees")
+	//}
 
-		if err := keyBag.EncryptMemo(&m, memo); err != nil {
-			return fmt.Errorf("EncryptMemo: %v", err)
-		}
+	//feesDec := decimal.Zero
+	//for _, fee := range fees {
+	//	feesDec = feesDec.Add(decimal.New(int64(fee.Amount), 0))
+	//}
 
-		op.Memo = &m
-	}
-
-	ops := &bt.Operations{&op}
-	operations := bt.Operations(*ops)
-	fees, err := decoder.wm.Api.GetRequiredFee(operations, assetID.String())
-	if err != nil {
-		return openwallet.Errorf(openwallet.ErrCreateRawTransactionFailed, "can't get fees")
-	}
-
-	feesDec := decimal.Zero
-	for _, fee := range fees {
-		feesDec = feesDec.Add(decimal.New(int64(fee.Amount), 0))
-	}
-
-	if err := operations.ApplyFees(fees); err != nil {
-		return openwallet.Errorf(openwallet.ErrCreateRawTransactionFailed, "ApplyFees")
-	}
+	//if err := operations.ApplyFees(fees); err != nil {
+	//	return openwallet.Errorf(openwallet.ErrCreateRawTransactionFailed, "ApplyFees")
+	//}
 
 	createTxErr := decoder.createRawTransaction(
 		wrapper,
@@ -576,7 +581,7 @@ func (decoder *TransactionDecoder) createRawTransaction(
 	rawTx.RawHex = hex.EncodeToString(jsonTx)
 	rawTx.Signatures[rawTx.Account.AccountID] = keySignList
 	rawTx.FeeRate = "0"
-	rawTx.Fees = feesDec.Shift(-5).String()
+	rawTx.Fees = feesDec.Shift(-3).String()
 	rawTx.IsBuilt = true
 	rawTx.TxAmount = accountTotalSent.Shift(-5).String()
 	rawTx.TxFrom = txFrom

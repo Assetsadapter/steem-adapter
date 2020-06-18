@@ -3,71 +3,37 @@ package types
 import (
 	"encoding/hex"
 	"encoding/json"
+
 	"fmt"
 	"reflect"
 
-	"github.com/Assetsadapter/bitshares-adapter/encoding"
-	"github.com/pkg/errors"
+	"github.com/Assetsadapter/steem-adapter/encoding"
+	"github.com/tidwall/gjson"
 )
 
-/*
- {
-	"type": "transfer_operation",
-	"value": {
-		"from": "porter",
-		"to": "aaronnn47",
-		"amount": {
-			"amount": "1117817",
-			"precision": 3,
-			"nai": "@@000000021"
-		},
-		"memo": "Ported balance"
-	}
-}
-*/
-
 type Operation interface {
-	Type() OpType
+	Type() string
 }
 
 type Operations []Operation
 
-func (ops *Operations) UnmarshalJSON(b []byte) (err error) {
-	// unmarshal array
-	var o []json.RawMessage
-	if err := json.Unmarshal(b, &o); err != nil {
-		return err
-	}
-
-	// foreach operation
-	for _, op := range o {
-		var kv []json.RawMessage
-		if err := json.Unmarshal(op, &kv); err != nil {
-			return err
-		}
-
-		if len(kv) != 2 {
-			return errors.New("invalid operation format: should be name, value")
-		}
-
-		var opType uint16
-		if err := json.Unmarshal(kv[0], &opType); err != nil {
-			return err
-		}
-
-		val, err := unmarshalOperation(OpType(opType), kv[1])
+func (ops *Operations) UnmarshalJSON(b string) (err error) {
+	r := gjson.Get(b, "operations")
+	rs := r.Array()
+	for _, r := range rs {
+		t := r.Get("type")
+		_type := t.String()
+		val, err := unmarshalOperation(_type, []byte(r.Raw))
 		if err != nil {
 			return err
 		}
-
 		*ops = append(*ops, val)
 	}
-
 	return nil
 }
 
 type operationTuple struct {
-	Type OpType
+	Type string
 	Data Operation
 }
 
@@ -89,7 +55,7 @@ func (ops Operations) MarshalJSON() ([]byte, error) {
 	return json.Marshal(tuples)
 }
 
-func unmarshalOperation(opType OpType, obj json.RawMessage) (Operation, error) {
+func unmarshalOperation(opType string, obj []byte) (Operation, error) {
 	op, ok := knownOperations[opType]
 	if !ok {
 		// operation is unknown wrap it as an unknown operation
@@ -107,53 +73,36 @@ func unmarshalOperation(opType OpType, obj json.RawMessage) (Operation, error) {
 	}
 }
 
-var knownOperations = map[OpType]reflect.Type{
-	TransferOpType:         reflect.TypeOf(TransferOperation{}),
-	LimitOrderCreateOpType: reflect.TypeOf(LimitOrderCreateOperation{}),
-	LimitOrderCancelOpType: reflect.TypeOf(LimitOrderCancelOperation{}),
+var knownOperations = map[string]reflect.Type{
+	"transfer_operation": reflect.TypeOf(TransferOperation{}),
+	//"limit_order_create": reflect.TypeOf(LimitOrderCreateOperation{}),
+	//"limit_order_cancel": reflect.TypeOf(LimitOrderCancelOperation{}),
 }
 
 // UnknownOperation
 type UnknownOperation struct {
-	kind OpType
+	kind string
 	Data json.RawMessage
 }
 
-func (op *UnknownOperation) Type() OpType { return op.kind }
+func (op *UnknownOperation) Type() string { return op.kind }
 
 // NewTransferOperation returns a new instance of TransferOperation
-func NewTransferOperation(from, to, amount string, fee AssetAmount) *TransferOperation {
+func NewTransferOperation(from, to, memo string, amount Amount) *TransferOperation {
 	op := &TransferOperation{
 		Value{
 			From: from,
 			To:   to,
-			Amount: AssetAmount{
-				//Amount:    amount,
-				Precision: 3,
-				Nai:       "",
+			Amount: Amount{
+				Amount:    amount.Amount,
+				Precision: amount.Precision,
+				Nai:       amount.Nai,
 			},
-			Memo: "",
+			Memo: memo,
 		},
 	}
-
 	return op
 }
-
-/*
-{
-    "type": "transfer_operation",
-    "value": {
-        "from": "initminer",
-        "to": "leor",
-        "amount": {
-            "amount": "1000",
-            "precision": 3,
-            "nai": "@@000000013"
-        },
-        "memo": "990909"
-    }
-}
-*/
 
 // TransferOperation
 type TransferOperation struct {
@@ -161,10 +110,25 @@ type TransferOperation struct {
 }
 
 type Value struct {
-	From   string      `json:"from"`
-	To     string      `json:"to"`
-	Amount AssetAmount `json:"amount"`
-	Memo   string      `json:"memo"`
+	From   string `json:"from"`
+	To     string `json:"to"`
+	Amount Amount `json:"amount"`
+	Memo   string `json:"memo"`
+}
+
+func (op *TransferOperation) Type() string { return "transfer_operation" }
+
+func (op *TransferOperation) Marshal(encoder *encoding.Encoder) error {
+	enc := encoding.NewRollingEncoder(encoder)
+
+	enc.Encode(op.Type())
+	enc.Encode(op.Value.From)
+	enc.Encode(op.Value.To)
+	enc.Encode(op.Value.Amount)
+	enc.Encode(op.Value.Memo)
+
+	enc.EncodeUVarint(0)
+	return enc.Err()
 }
 
 type Buffer []byte
@@ -201,107 +165,8 @@ func (p Buffer) MarshalJSON() ([]byte, error) {
 func (p *Buffer) UnmarshalJSON(data []byte) error {
 	var b string
 	if err := json.Unmarshal(data, &b); err != nil {
-		return fmt.Errorf("Unmarshal: %v", err)
+		return fmt.Errorf("Unmarshal: %s", err.Error())
 	}
 
 	return p.FromString(b)
 }
-
-type Memo struct {
-	From    string `json:"from"`
-	To      string `json:"to"`
-	Nonce   string `json:"nonce"`
-	Message Buffer `json:"message"`
-}
-
-func (m Memo) Marshal(encoder *encoding.Encoder) error {
-	enc := encoding.NewRollingEncoder(encoder)
-	enc.Encode(m.From)
-	enc.Encode(m.To)
-	enc.Encode(m.Nonce)
-	enc.Encode(m.Message)
-	return enc.Err()
-}
-
-func (op *TransferOperation) Type() OpType { return TransferOpType }
-
-func (op *TransferOperation) Marshal(encoder *encoding.Encoder) error {
-	enc := encoding.NewRollingEncoder(encoder)
-
-	enc.EncodeUVarint(uint64(op.Type()))
-	enc.Encode(op.Value.From)
-	enc.Encode(op.Value.To)
-	enc.Encode(op.Value.Amount)
-	enc.Encode(op.Value.Memo)
-
-	//Memo?
-	// enc.EncodeUVarint(0)
-	//Extensions
-	enc.EncodeUVarint(0)
-	return enc.Err()
-}
-
-// LimitOrderCreateOperation
-type LimitOrderCreateOperation struct {
-	Fee          AssetAmount       `json:"fee"`
-	Seller       ObjectID          `json:"seller"`
-	AmountToSell AssetAmount       `json:"amount_to_sell"`
-	MinToReceive AssetAmount       `json:"min_to_receive"`
-	Expiration   Time              `json:"expiration"`
-	FillOrKill   bool              `json:"fill_or_kill"`
-	Extensions   []json.RawMessage `json:"extensions"`
-}
-
-func (op *LimitOrderCreateOperation) Marshal(encoder *encoding.Encoder) error {
-	enc := encoding.NewRollingEncoder(encoder)
-
-	enc.EncodeUVarint(uint64(op.Type()))
-	enc.Encode(op.Fee)
-	enc.Encode(op.Seller)
-	enc.Encode(op.AmountToSell)
-	enc.Encode(op.MinToReceive)
-	enc.Encode(op.Expiration)
-	enc.EncodeBool(op.FillOrKill)
-
-	//extensions
-	enc.EncodeUVarint(0)
-	return enc.Err()
-}
-
-func (op *LimitOrderCreateOperation) Type() OpType { return LimitOrderCreateOpType }
-
-// LimitOrderCancelOpType
-type LimitOrderCancelOperation struct {
-	Fee              AssetAmount       `json:"fee"`
-	FeePayingAccount ObjectID          `json:"fee_paying_account"`
-	Order            ObjectID          `json:"order"`
-	Extensions       []json.RawMessage `json:"extensions"`
-}
-
-func (op *LimitOrderCancelOperation) Marshal(encoder *encoding.Encoder) error {
-	enc := encoding.NewRollingEncoder(encoder)
-
-	enc.EncodeUVarint(uint64(op.Type()))
-	enc.Encode(op.Fee)
-	enc.Encode(op.FeePayingAccount)
-	enc.Encode(op.Order)
-
-	// extensions
-	enc.EncodeUVarint(0)
-	return enc.Err()
-}
-
-func (op *LimitOrderCancelOperation) Type() OpType { return LimitOrderCancelOpType }
-
-// FillOrderOpType
-type FillOrderOperation struct {
-	Order   ObjectID
-	Account ObjectID
-	Pays    AssetAmount
-	Recives AssetAmount
-	Fee     AssetAmount
-	Price   Price
-	IsMaker bool
-}
-
-func (op *FillOrderOperation) Type() OpType { return FillOrderOpType }

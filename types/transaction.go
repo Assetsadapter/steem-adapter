@@ -54,13 +54,13 @@ type V struct {
 	Memo   string `json:"memo"`
 }
 
-type Amount struct {
-	Amount    string `json:"amount"`
-	Precision int    `json:"precision"`
-	Nai       string `json:"nai"`
-}
+// type Amount struct {
+// 	Amount    string `json:"amount"`
+// 	Precision int    `json:"precision"`
+// 	Nai       string `json:"nai"`
+// }
 
-// Marshal implements encoding.Marshaller interface.
+// Marshal implements encoding_.Marshaller interface.
 func (tx *Transaction) Marshal(encoder *encoding.Encoder) error {
 	if len(tx.Operations) == 0 {
 		return errors.New("no operation specified")
@@ -82,7 +82,7 @@ func (tx *Transaction) Marshal(encoder *encoding.Encoder) error {
 	return enc.Err()
 }
 
-// PushOperation can be used to add an operation into the encoding.
+// PushOperation can be used to add an operation into the encoding_.
 func (tx *Transaction) PushOperation(op Op) {
 	tx.Operations = append(tx.Operations, &op)
 }

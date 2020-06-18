@@ -25,7 +25,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/Assetsadapter/steem-adapter/encoding"
+	"github.com/Assetsadapter/steem-adapter/encoding_"
 	"github.com/Assetsadapter/steem-adapter/types"
 	"github.com/blocktree/openwallet/common"
 	"github.com/blocktree/openwallet/crypto"
@@ -58,7 +58,7 @@ func NewBlockHeader(result *gjson.Result) *BlockHeader {
 
 func (block *BlockHeader) Serialize() ([]byte, error) {
 	var b bytes.Buffer
-	encoder := encoding.NewEncoder(&b)
+	encoder := encoding_.NewEncoder(&b)
 
 	if err := encoder.Encode(block); err != nil {
 		return nil, err
@@ -92,10 +92,10 @@ func (block *BlockHeader) CalculateID() (string, error) {
 	return id[:length], nil
 }
 
-// MarshalBlockHeader implements encoding.Marshaller interface.
-func (block *BlockHeader) Marshal(encoder *encoding.Encoder) error {
+// MarshalBlockHeader implements encoding_.Marshaller interface.
+func (block *BlockHeader) Marshal(encoder *encoding_.Encoder) error {
 
-	enc := encoding.NewRollingEncoder(encoder)
+	enc := encoding_.NewRollingEncoder(encoder)
 
 	enc.Encode(block.TransactionMerkleRoot)
 	enc.Encode(block.Previous)
@@ -107,48 +107,6 @@ func (block *BlockHeader) Marshal(encoder *encoding.Encoder) error {
 	enc.EncodeUVarint(0)
 	return enc.Err()
 }
-
-/*
-"block": {
-	"previous": "0000005af2a40c77b87897e01a7430cc36ea578a",
-	"timestamp": "2020-04-07T02:45:24",
-	"witness": "initminer",
-	"transaction_merkle_root": "989ff103edf047ae94e0f7e7e09cd1c0ccf7f4ed",
-	"extensions": [],
-	"witness_signature": "20a50f54af6fac486990ddacfb4d64dcaf8f53df8b6a9c9e6624f25ef67f1ea50728d93d11353183037312e686be47fcdcc45472e79f66701715090e64ed36a29e",
-	"transactions": [
-		{
-			"ref_block_num": 90,
-			"ref_block_prefix": 1997317362,
-			"expiration": "2020-04-07T02:45:51",
-			"operations": [
-				{
-					"type": "transfer_operation",
-					"value": {
-						"from": "initminer",
-						"to": "leor",
-						"amount": {
-							"amount": "1",
-							"precision": 3,
-							"nai": "@@000000013"
-						},
-						"memo": "test cli_wallet"
-					}
-				}
-			],
-			"extensions": [],
-			"signatures": [
-				"1f68b0915353ef12aa77697849f538d488d1d27fc9eee123ce32744c487b71e3e44ba3027f8cde7ab90a4aecf58cf37b506f2196e0de5d90dd6b93c607ccccc361"
-			]
-		}
-	],
-	"block_id": "0000005b1feae084bd3bd9190c5ad53d372f5996",
-	"signing_key": "TST6LLegbAgLAy28EHrffBVuANFWcFgmqRMW13wBmTExqFE9SCkg4",
-	"transaction_ids": [
-		"d92701a99c44fb9e0ee944497311775eaeeedb94"
-	]
-}
-*/
 
 type Block struct {
 	Previous              string               `json:"previous"`

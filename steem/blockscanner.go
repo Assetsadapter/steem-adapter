@@ -446,7 +446,7 @@ func (bs *BtsBlockScanner) InitExtractResult(sourceKey string, operation *types.
 	//如果交易有memo,解密加密的memo Message
 	//if len(operation.Memo.Message) > 0 {
 	//	nonce, _ := strconv.ParseUint(operation.Value.Memo.Nonce, 10, 64)
-	//	memoText, err = encoding.Decrypt(operation.Memo.Message.String(), from.Options.MemoKey, to.Options.MemoKey, nonce, bs.wm.Config.MemoPrivateKey)
+	//	memoText, err = encoding_.Decrypt(operation.Memo.Message.String(), from.Options.MemoKey, to.Options.MemoKey, nonce, bs.wm.Config.MemoPrivateKey)
 	//	if err != nil {
 	//		bs.wm.Log.Std.Error("cannot get transaction memo, txId=%s  \n err= %v", result.TxID, err)
 	//
