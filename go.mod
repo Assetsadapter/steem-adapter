@@ -11,6 +11,7 @@ require (
 	github.com/blocktree/go-owcdrivers v1.0.39
 	github.com/blocktree/go-owcrypt v1.0.3
 	github.com/blocktree/openwallet v1.4.11
+	github.com/btcsuite/btcd v0.20.1-beta
 	github.com/denkhaus/bitshares v0.6.1-0.20190502142618-5ae8c00cb394
 	github.com/go-steem/rpc v0.10.0 // indirect
 	github.com/imroc/req v0.2.3

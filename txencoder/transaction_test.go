@@ -11,8 +11,8 @@ func TestTransaction_Encode(t *testing.T) {
 		RefBlockNum:    486639 & 0xFFFF,
 		RefBlockPrefix: "66f42506",
 		Expiration:     time.Now(),
-		Operations: &[]RawTransferOperation{
-			{
+		Operations: &[]RawOperation{
+			&RawTransferOperation{
 				Type: 2,
 				From: "initminer",
 				To:   "exxexchange",
@@ -35,7 +35,7 @@ func TestTransaction_Encode(t *testing.T) {
 }
 
 func TestTransaction_Decode(t *testing.T) {
-	data := "ef6c66f425060b1fec5e010209696e69746d696e65720b65787865786368616e6765e80300000000000003544244000000000831303030303030320000"
+	data := "ef6c66f425061d7cec5e010209696e69746d696e65720b65787865786368616e6765e80300000000000003544244000000000831303030303030320000"
 	rawTx := RawTransaction{}
 	dataByte, err := hex.DecodeString(data)
 	if err != nil {

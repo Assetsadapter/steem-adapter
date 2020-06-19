@@ -9,15 +9,33 @@ type RawTransaction struct {
 	RefBlockNum    uint16
 	RefBlockPrefix string
 	Expiration     time.Time
-	Operations     *[]RawTransferOperation
+	Operations     *[]RawOperation
+}
+
+type RawOperation interface {
+	OpType() OpType
+}
+
+func NewRawOperation(opType OpType) RawOperation {
+	switch opType {
+	case Vote:
+	case Comment:
+	case Transfer:
+		return &RawTransferOperation{}
+	}
+	return nil
 }
 
 type RawTransferOperation struct {
-	Type   uint8
+	Type   OpType
 	From   string
 	To     string
 	Amount RawAmount
 	Memo   string
+}
+
+func (txOp *RawTransferOperation) OpType() OpType {
+	return txOp.Type
 }
 
 type RawAmount struct {
@@ -51,20 +69,10 @@ func (rt *RawTransaction) decode(tx Transaction) error {
 	rt.RefBlockNum = littleEndianBytesToUint16(tx.RefBlockPrefix)
 	rt.RefBlockPrefix = hex.EncodeToString(tx.RefBlockPrefix)
 	rt.Expiration = time.Unix(int64(littleEndianBytesToUint32(tx.Expiration)), 8)
-	rt.Operations = &[]RawTransferOperation{}
+	rt.Operations = &[]RawOperation{}
 	for _, op := range *tx.Operations {
-		txOp := RawTransferOperation{
-			Type: uint8(op.Type),
-			From: string(op.From),
-			To:   string(op.To),
-			Amount: RawAmount{
-				Amount:    littleEndianBytesToUint64(op.Amount.Amount),
-				Precision: op.Amount.Precision,
-				Nai:       string(op.Amount.Nai),
-			},
-			Memo: string(op.Memo),
-		}
-		*rt.Operations = append(*rt.Operations, txOp)
+		rawOp := op.(TxEncoder).DecodeRaw().(*RawTransferOperation)
+		*rt.Operations = append(*rt.Operations, rawOp)
 	}
 	return nil
 }

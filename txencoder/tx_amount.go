@@ -44,3 +44,12 @@ func (a *Amount) Decode(offset int, data []byte) (int, error) {
 	index += 7
 	return index, nil
 }
+
+func (a *Amount) DecodeRaw() interface{} {
+	ret := RawAmount{
+		Amount:    littleEndianBytesToUint64(a.Amount),
+		Precision: a.Precision,
+		Nai:       string(a.Nai),
+	}
+	return ret
+}

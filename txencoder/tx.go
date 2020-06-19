@@ -10,6 +10,7 @@ import (
 type TxEncoder interface {
 	Encode() *[]byte
 	Decode(offset int, data []byte) (int, error)
+	DecodeRaw() interface{}
 }
 
 /*
@@ -30,17 +31,17 @@ type TxEncoder interface {
 */
 
 type Transaction struct {
-	RefBlockNum    []byte               // 2 byte, 当前区块号 & 0xFFFF 获取一个参考的区块
-	RefBlockPrefix []byte               // 4 byte, 当前区块id的第四个字节开始取4个字节长度的值进行小端转换作为参考值
-	Expiration     []byte               // 4 byte, 时间戳
-	Operations     *[]TransferOperation // 交易的操作
-	Extensions     *[]Extension         // 扩展
-	Signatures     *[]Signature         // 签名
+	RefBlockNum    []byte       // 2 byte, 当前区块号 & 0xFFFF 获取一个参考的区块
+	RefBlockPrefix []byte       // 4 byte, 当前区块id的第四个字节开始取4个字节长度的值进行小端转换作为参考值
+	Expiration     []byte       // 4 byte, 时间戳
+	Operations     *[]Operation // 交易的操作
+	Extensions     *[]Extension // 扩展
+	Signatures     *[]Signature // 签名
 }
 
 type Signature []byte
 
-func newEmptyTransaction(refBlockNum uint16, expiration time.Time, refBlockPrefix string, op *[]RawTransferOperation) (*Transaction, error) {
+func newEmptyTransaction(refBlockNum uint16, expiration time.Time, refBlockPrefix string, ops *[]RawOperation) (*Transaction, error) {
 	result := &Transaction{}
 	result.RefBlockNum = uint16ToLittleEndianBytes(refBlockNum)
 	refPrefix, err := hex.DecodeString(refBlockPrefix)
@@ -50,12 +51,16 @@ func newEmptyTransaction(refBlockNum uint16, expiration time.Time, refBlockPrefi
 	}
 	result.RefBlockPrefix = refPrefix
 	result.Expiration = uint32ToLittleEndianBytes(uint32(expiration.Unix()))
-	ops, err := newEmptyTransferOperations(op)
-	if err != nil {
-		log.Errorf("Decoder transaction failed : %s", err.Error())
-		return nil, err
+	binOps := []Operation{}
+	for _, op := range *ops {
+		txOp := NewOperation(op.OpType())
+		err := txOp.InitData(&op)
+		if err != nil {
+			return nil, err
+		}
+		binOps = append(binOps, txOp)
 	}
-	result.Operations = ops
+	result.Operations = &binOps
 	result.Extensions = &[]Extension{}
 	result.Signatures = &[]Signature{}
 	return result, nil
@@ -68,7 +73,8 @@ func (tx *Transaction) Encode() *[]byte {
 	bytesData = append(bytesData, tx.Expiration...)
 	bytesData = append(bytesData, byte(len(*tx.Operations)))
 	for _, op := range *tx.Operations {
-		bytesData = append(bytesData, *op.Encode()...)
+		opEncode := op.(TxEncoder)
+		bytesData = append(bytesData, *opEncode.Encode()...)
 	}
 	bytesData = append(bytesData, byte(len(*tx.Extensions)))
 	bytesData = append(bytesData, byte(len(*tx.Signatures)))
@@ -85,10 +91,11 @@ func (tx *Transaction) Decode(offset int, data []byte) (int, error) {
 	index += 4
 	opsCount := int(data[index])
 	index += 1
-	tx.Operations = &[]TransferOperation{}
+	tx.Operations = &[]Operation{}
 	for i := opsCount; i > 0; i-- {
-		txOp := TransferOperation{}
-		newOffset, err := txOp.Decode(index, data)
+		txOp := NewOperation(OpType(data[index]))
+		txEncode := txOp.(TxEncoder)
+		newOffset, err := txEncode.Decode(index, data)
 		if err != nil {
 			return newOffset, err
 		}
@@ -115,4 +122,19 @@ func (tx *Transaction) Decode(offset int, data []byte) (int, error) {
 		}
 	}
 	return index, nil
+}
+
+func (tx *Transaction) DecodeRaw() interface{} {
+	ret := RawTransaction{
+		RefBlockNum:    littleEndianBytesToUint16(tx.RefBlockNum),
+		RefBlockPrefix: hex.EncodeToString(tx.RefBlockPrefix),
+		Expiration:     time.Unix(int64(littleEndianBytesToUint64(tx.Expiration)), 0),
+	}
+	rawOps := []RawOperation{}
+	for _, op := range *tx.Operations {
+		txOp := op.(*TransferOperation).DecodeRaw().(RawOperation)
+		rawOps = append(rawOps, txOp)
+	}
+	ret.Operations = &rawOps
+	return ret
 }

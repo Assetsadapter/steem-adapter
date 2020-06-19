@@ -107,60 +107,28 @@ func (decoder *TransactionDecoder) CreateRawTransaction(wrapper openwallet.Walle
 		RefBlockNum:    uint16(blockInfo.HeadBlockNum & 0xFFFF),
 		RefBlockPrefix: blockInfo.HeadBlockID[4:9],
 		Expiration:     time.Now().Add(30 * time.Second),
-		Operations: txencoder.RawTransferOperation{
-			Type: 2,
-			From: fromAccount.Name,
-			To:   toAccount.Name,
-			Amount: txencoder.RawAmount{
-				Amount:    0,
-				Precision: 0,
-				Nai:       "",
+		Operations: &[]txencoder.RawTransferOperation{
+			{
+				Type: 2,
+				From: fromAccount.Name,
+				To:   toAccount.Name,
+				Amount: txencoder.RawAmount{
+					Amount:    0,
+					Precision: 0,
+					Nai:       "",
+				},
+				Memo: memo,
 			},
-			Memo: memo,
 		},
 	}
 
-	op := operations.TransferOperation{
-		Amount:     amount,
-		Extensions: bt.Extensions{},
-		From:       bt.AccountIDFromObject(bt.NewAccountID(fromAccount.Id)),
-		To:         bt.AccountIDFromObject(bt.NewAccountID(toAccount.Id)),
+	ops := txencoder.RawTransferOperation{
+		Type:   2,
+		From:   fromAccount.Name,
+		To:     toAccount.Name,
+		Amount: txencoder.RawAmount{},
+		Memo:   memo,
 	}
-
-	//fromPublicKey, _ := bt.NewPublicKeyFromString(fromAccount.MemoKey)
-	//toPublicKey, _ := bt.NewPublicKeyFromString(toAccount.MemoKey)
-	//
-	//if memo != "" {
-	//	m := bt.Memo{
-	//		From:  *fromPublicKey,
-	//		To:    *toPublicKey,
-	//		Nonce: bt.UInt64(rand.Uint64()),
-	//	}
-	//	keyBag := crypto.NewKeyBag()
-	//	keyBag.Add(decoder.wm.Config.MemoPrivateKey)
-	//
-	//	if err := keyBag.EncryptMemo(&m, memo); err != nil {
-	//		return fmt.Errorf("EncryptMemo: %v", err)
-	//	}
-	//
-	//	op.Memo = &m
-	//}
-
-	//ops := &bt.Operations{&op}
-	//operations := bt.Operations(*ops)
-	//fees, err := decoder.wm.Api.GetRequiredFee(operations, assetID.String())
-	//if err != nil {
-	//	return openwallet.Errorf(openwallet.ErrCreateRawTransactionFailed, "can't get fees")
-	//}
-
-	//feesDec := decimal.Zero
-	//for _, fee := range fees {
-	//	feesDec = feesDec.Add(decimal.New(int64(fee.Amount), 0))
-	//}
-
-	//if err := operations.ApplyFees(fees); err != nil {
-	//	return openwallet.Errorf(openwallet.ErrCreateRawTransactionFailed, "ApplyFees")
-	//}
 
 	createTxErr := decoder.createRawTransaction(
 		wrapper,
