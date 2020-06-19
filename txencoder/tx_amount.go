@@ -10,11 +10,6 @@ func newEmptyAmount(amount *RawAmount) (*Amount, error) {
 	result := &Amount{}
 	result.Amount = uint64ToLittleEndianBytes(amount.Amount)
 	result.Precision = amount.Precision
-	//naiByte, err := hex.DecodeString(amount.Nai)
-	//if err != nil {
-	//	log.Errorf("decoder nai failed : %s", err.Error())
-	//	return nil, err
-	//}
 	result.Nai = fillNai([]byte(amount.Nai))
 	return result, nil
 }
@@ -31,7 +26,7 @@ func fillNai(nai []byte) []byte {
 	return nai
 }
 
-func (a *Amount) Decode() *[]byte {
+func (a *Amount) Encode() *[]byte {
 	bytesData := []byte{}
 	bytesData = append(bytesData, (*a).Amount...)
 	bytesData = append(bytesData, (*a).Precision)
@@ -39,7 +34,7 @@ func (a *Amount) Decode() *[]byte {
 	return &bytesData
 }
 
-func (a *Amount) Encode(offset int, data []byte) (int, error) {
+func (a *Amount) Decode(offset int, data []byte) (int, error) {
 	index := offset
 	a.Amount = data[index : index+8]
 	index += 8

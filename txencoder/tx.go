@@ -8,8 +8,8 @@ import (
 )
 
 type TxEncoder interface {
-	Decode() *[]byte
-	Encode(offset int, data []byte) (int, error)
+	Encode() *[]byte
+	Decode(offset int, data []byte) (int, error)
 }
 
 /*
@@ -43,12 +43,12 @@ type Signature []byte
 func newEmptyTransaction(refBlockNum uint16, expiration time.Time, refBlockPrefix string, op *[]RawTransferOperation) (*Transaction, error) {
 	result := &Transaction{}
 	result.RefBlockNum = uint16ToLittleEndianBytes(refBlockNum)
-	refPrefixNum, err := hex.DecodeString(refBlockPrefix)
+	refPrefix, err := hex.DecodeString(refBlockPrefix)
 	if err != nil {
 		log.Errorf("Reverse ref block prefix failed : %s", err.Error())
 		return nil, err
 	}
-	result.RefBlockPrefix = refPrefixNum
+	result.RefBlockPrefix = refPrefix
 	result.Expiration = uint32ToLittleEndianBytes(uint32(expiration.Unix()))
 	ops, err := newEmptyTransferOperations(op)
 	if err != nil {
@@ -61,21 +61,21 @@ func newEmptyTransaction(refBlockNum uint16, expiration time.Time, refBlockPrefi
 	return result, nil
 }
 
-func (tx *Transaction) Decode() *[]byte {
+func (tx *Transaction) Encode() *[]byte {
 	bytesData := []byte{}
 	bytesData = append(bytesData, tx.RefBlockNum...)
 	bytesData = append(bytesData, tx.RefBlockPrefix...)
 	bytesData = append(bytesData, tx.Expiration...)
 	bytesData = append(bytesData, byte(len(*tx.Operations)))
 	for _, op := range *tx.Operations {
-		bytesData = append(bytesData, *op.Decode()...)
+		bytesData = append(bytesData, *op.Encode()...)
 	}
 	bytesData = append(bytesData, byte(len(*tx.Extensions)))
 	bytesData = append(bytesData, byte(len(*tx.Signatures)))
 	return &bytesData
 }
 
-func (tx *Transaction) Encode(offset int, data []byte) (int, error) {
+func (tx *Transaction) Decode(offset int, data []byte) (int, error) {
 	index := offset
 	tx.RefBlockNum = data[index : index+2]
 	index += 2
@@ -85,9 +85,10 @@ func (tx *Transaction) Encode(offset int, data []byte) (int, error) {
 	index += 4
 	opsCount := int(data[index])
 	index += 1
+	tx.Operations = &[]TransferOperation{}
 	for i := opsCount; i > 0; i-- {
 		txOp := TransferOperation{}
-		newOffset, err := txOp.Encode(index, data)
+		newOffset, err := txOp.Decode(index, data)
 		if err != nil {
 			return newOffset, err
 		}
@@ -96,17 +97,18 @@ func (tx *Transaction) Encode(offset int, data []byte) (int, error) {
 	}
 	extenCount := int(data[index])
 	index += 1
+	tx.Extensions = &[]Extension{}
 	if extenCount > 0 {
 		e := Extension{}
-		newOffset, err := e.Encode(index, data)
+		index, err := e.Decode(index, data)
 		if err != nil {
-			return newOffset, err
+			return index, err
 		}
 		*tx.Extensions = append(*tx.Extensions, e)
-		index = newOffset
 	}
 	signCount := int(data[index])
 	index += 1
+	tx.Signatures = &[]Signature{}
 	if signCount > 0 {
 		for i := signCount; i > 0; i-- {
 			*tx.Signatures = append(*tx.Signatures, data[index:index+signCount])

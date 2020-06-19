@@ -71,3 +71,7 @@ func uint64ToLittleEndianBytes(data uint64) []byte {
 	binary.LittleEndian.PutUint64(tmp[:], data)
 	return tmp[:]
 }
+
+func littleEndianBytesToUint64(data []byte) uint64 {
+	return binary.LittleEndian.Uint64(data)
+}

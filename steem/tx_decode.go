@@ -22,6 +22,8 @@ import (
 	"math/rand"
 	"time"
 
+	"github.com/Assetsadapter/steem-adapter/txencoder"
+
 	"github.com/Assetsadapter/steem-adapter/txsigner"
 	"github.com/Assetsadapter/steem-adapter/types"
 	"github.com/denkhaus/bitshares/config"
@@ -54,18 +56,10 @@ func (decoder *TransactionDecoder) CreateRawTransaction(wrapper openwallet.Walle
 		accountID = rawTx.Account.AccountID
 		amountStr string
 		to        string
-		//assetID   types.ObjectID
-		precise uint64
+		precise   uint64
 	)
 
-	if rawTx.Coin.IsContract {
-		assetID = types.MustParseObjectID(rawTx.Coin.Contract.Address)
-		precise = rawTx.Coin.Contract.Decimals
-	} else {
-		assetID = types.MustParseObjectID(SteemNai)
-		precise = 3
-		rawTx.Coin.Contract.Address = SteemNai
-	}
+	precise = 3
 
 	//获取wallet
 	account, err := wrapper.GetAssetsAccountInfo(accountID)
@@ -84,7 +78,6 @@ func (decoder *TransactionDecoder) CreateRawTransaction(wrapper openwallet.Walle
 	}
 
 	// 检查转出、目标账户是否存在
-
 	accounts, err := decoder.wm.Api.GetAccounts(account.Alias)
 	if err != nil {
 		return openwallet.Errorf(openwallet.ErrAccountNotAddress, "accounts have not registered [%v]", err)
@@ -97,27 +90,35 @@ func (decoder *TransactionDecoder) CreateRawTransaction(wrapper openwallet.Walle
 	}
 	toAccount := accounts[0]
 
-	// 检查转出账户余额
-	//balance, err := decoder.wm.Api.GetAssetsBalance(fromAccount.Id, assetID)
-	//if err != nil || balance == nil {
-	//	return openwallet.Errorf(openwallet.ErrInsufficientBalanceOfAccount, "all address's balance of account is not enough")
-	//}
-
 	accountBalanceDec, _ := decimal.NewFromString(fromAccount.Balance)
 	amountDec, _ := decimal.NewFromString(amountStr)
 	amountDec = amountDec.Shift(int32(precise))
 
+	// 检查转账账号的余额是否大于转出金额
 	if accountBalanceDec.LessThan(amountDec) {
 		return openwallet.Errorf(openwallet.ErrInsufficientBalanceOfAccount, "all address's balance of account is not enough")
 	}
 
 	memo := rawTx.GetExtParam().Get("memo").String()
 
-	//asset := bt.AssetIDFromObject(bt.NewAssetID(assetID.String()))
-	//amount := bt.Amount{
-	//	Asset:  asset,
-	//	Amount: bt.Int64(amountDec.IntPart()),
-	//}
+	blockInfo, _ := decoder.wm.Api.GetBlockchainInfo()
+
+	txOp := txencoder.RawTransaction{
+		RefBlockNum:    uint16(blockInfo.HeadBlockNum & 0xFFFF),
+		RefBlockPrefix: blockInfo.HeadBlockID[4:9],
+		Expiration:     time.Now().Add(30 * time.Second),
+		Operations: txencoder.RawTransferOperation{
+			Type: 2,
+			From: fromAccount.Name,
+			To:   toAccount.Name,
+			Amount: txencoder.RawAmount{
+				Amount:    0,
+				Precision: 0,
+				Nai:       "",
+			},
+			Memo: memo,
+		},
+	}
 
 	op := operations.TransferOperation{
 		Amount:     amount,
