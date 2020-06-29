@@ -17,18 +17,15 @@ package steem
 
 import (
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
-	"math/rand"
+	"strings"
 	"time"
+
+	"github.com/Assetsadapter/steem-adapter/addrdec"
 
 	"github.com/Assetsadapter/steem-adapter/txencoder"
 
 	"github.com/Assetsadapter/steem-adapter/txsigner"
-	"github.com/Assetsadapter/steem-adapter/types"
-	"github.com/denkhaus/bitshares/config"
-	"github.com/denkhaus/bitshares/crypto"
-	"github.com/denkhaus/bitshares/operations"
 	bt "github.com/denkhaus/bitshares/types"
 
 	owcrypt "github.com/blocktree/go-owcrypt"
@@ -56,7 +53,7 @@ func (decoder *TransactionDecoder) CreateRawTransaction(wrapper openwallet.Walle
 		accountID = rawTx.Account.AccountID
 		amountStr string
 		to        string
-		precise   uint64
+		precise   uint8
 	)
 
 	precise = 3
@@ -90,7 +87,11 @@ func (decoder *TransactionDecoder) CreateRawTransaction(wrapper openwallet.Walle
 	}
 	toAccount := accounts[0]
 
-	accountBalanceDec, _ := decimal.NewFromString(fromAccount.Balance)
+	fromBalance := strings.Split(fromAccount.Balance, " ")
+	amountBalance := fromBalance[0]
+	amountNai := fromBalance[1]
+
+	accountBalanceDec, _ := decimal.NewFromString(amountBalance)
 	amountDec, _ := decimal.NewFromString(amountStr)
 	amountDec = amountDec.Shift(int32(precise))
 
@@ -101,33 +102,16 @@ func (decoder *TransactionDecoder) CreateRawTransaction(wrapper openwallet.Walle
 
 	memo := rawTx.GetExtParam().Get("memo").String()
 
-	blockInfo, _ := decoder.wm.Api.GetBlockchainInfo()
-
-	txOp := txencoder.RawTransaction{
-		RefBlockNum:    uint16(blockInfo.HeadBlockNum & 0xFFFF),
-		RefBlockPrefix: blockInfo.HeadBlockID[4:9],
-		Expiration:     time.Now().Add(30 * time.Second),
-		Operations: &[]txencoder.RawTransferOperation{
-			{
-				Type: 2,
-				From: fromAccount.Name,
-				To:   toAccount.Name,
-				Amount: txencoder.RawAmount{
-					Amount:    0,
-					Precision: 0,
-					Nai:       "",
-				},
-				Memo: memo,
-			},
+	ops := &txencoder.RawTransferOperation{
+		Type: 2,
+		From: fromAccount.Name,
+		To:   toAccount.Name,
+		Amount: txencoder.RawAmount{
+			Amount:    uint64(amountDec.IntPart()),
+			Precision: precise,
+			Nai:       amountNai,
 		},
-	}
-
-	ops := txencoder.RawTransferOperation{
-		Type:   2,
-		From:   fromAccount.Name,
-		To:     toAccount.Name,
-		Amount: txencoder.RawAmount{},
-		Memo:   memo,
+		Memo: memo,
 	}
 
 	createTxErr := decoder.createRawTransaction(
@@ -136,7 +120,6 @@ func (decoder *TransactionDecoder) CreateRawTransaction(wrapper openwallet.Walle
 		&accountBalanceDec,
 		account.Alias,
 		ops,
-		feesDec,
 		memo)
 	if createTxErr != nil {
 		return createTxErr
@@ -169,6 +152,16 @@ func (decoder *TransactionDecoder) SignRawTransaction(wrapper openwallet.WalletD
 				return err
 			}
 
+			wifPriKey, err := decoder.wm.Decoder.PrivateKeyToWIF(keyBytes, true)
+			if err != nil {
+				return err
+			}
+
+			compPriKey, err := addrdec.GetRoleCompressKey(rawTx.TxFrom[0], "active", wifPriKey, CurveType)
+			if err != nil {
+				return err
+			}
+
 			hash, err := hex.DecodeString(keySignature.Message)
 			if err != nil {
 				return fmt.Errorf("decoder transaction hash failed, unexpected err: %v", err)
@@ -176,7 +169,7 @@ func (decoder *TransactionDecoder) SignRawTransaction(wrapper openwallet.WalletD
 
 			decoder.wm.Log.Debug("hash:", hash)
 
-			sig, err := txsigner.Default.SignTransactionHash(hash, keyBytes, decoder.wm.CurveType())
+			sig, err := txsigner.Default.SignTransactionHash(hash, compPriKey, decoder.wm.CurveType())
 			if err != nil {
 				return fmt.Errorf("sign transaction hash failed, unexpected err: %v", err)
 			}
@@ -200,12 +193,12 @@ func (decoder *TransactionDecoder) VerifyRawTransaction(wrapper openwallet.Walle
 		return fmt.Errorf("transaction signature is empty")
 	}
 
-	var tx bt.SignedTransaction
+	var tx txencoder.Transaction
 	txHex, err := hex.DecodeString(rawTx.RawHex)
 	if err != nil {
 		return fmt.Errorf("transaction DecodeString failed, unexpected error: %v", err)
 	}
-	err = tx.UnmarshalJSON(txHex)
+	_, err = tx.Decode(0, txHex)
 	if err != nil {
 		return fmt.Errorf("transaction UnmarshalJSON failed, unexpected error: %v", err)
 	}
@@ -227,16 +220,16 @@ func (decoder *TransactionDecoder) VerifyRawTransaction(wrapper openwallet.Walle
 				return fmt.Errorf("transaction verify failed: %v", err)
 			}
 
-			tx.Signatures = append(
-				tx.Signatures,
+			*tx.Signatures = append(
+				*tx.Signatures,
 				compactSig,
 			)
 		}
 	}
 
 	rawTx.IsCompleted = true
-	jsonTx, _ := tx.MarshalJSON()
-	rawTx.RawHex = hex.EncodeToString(jsonTx)
+	jsonTx := tx.Encode()
+	rawTx.RawHex = hex.EncodeToString(*jsonTx)
 
 	return nil
 }
@@ -312,145 +305,144 @@ func (decoder *TransactionDecoder) CreateSummaryRawTransaction(wrapper openwalle
 }
 
 //CreateSummaryRawTransactionWithError 创建汇总交易
-func (decoder *TransactionDecoder) CreateSummaryRawTransactionWithError(wrapper openwallet.WalletDAI, sumRawTx *openwallet.SummaryRawTransaction) ([]*openwallet.RawTransactionWithError, error) {
-
-	var (
-		rawTxArray = make([]*openwallet.RawTransactionWithError, 0)
-		accountID  = sumRawTx.Account.AccountID
-		assetID    types.ObjectID
-		precise    uint64
-	)
-	sumRawTx.Coin.Contract = openwallet.SmartContract{Address: "1.3.0", Symbol: "BTS", Token: "BTS"}
-	assetID = types.MustParseObjectID("1.3.0")
-	precise = 5
-
-	minTransfer, _ := decimal.NewFromString(sumRawTx.MinTransfer)
-	retainedBalance, _ := decimal.NewFromString(sumRawTx.RetainedBalance)
-
-	if minTransfer.LessThan(retainedBalance) {
-		return nil, fmt.Errorf("mini transfer amount must be greater than address retained balance")
-	}
-
-	//获取wallet
-	account, err := wrapper.GetAssetsAccountInfo(accountID)
-	if err != nil {
-		return nil, err
-	}
-
-	if account.Alias == "" {
-		return nil, fmt.Errorf("[%s] have not been created", accountID)
-	}
-
-	// 检查转出、目标账户是否存在
-	accounts, err := decoder.wm.Api.GetAccounts(account.Alias, sumRawTx.SummaryAddress)
-	if err != nil {
-		return nil, openwallet.Errorf(openwallet.ErrAccountNotAddress, "accounts have not registered [%v] ", err)
-	}
-
-	fromAccount := accounts[0]
-	toAccount := accounts[1]
-
-	// 检查转出账户余额
-	//balance, err := decoder.wm.Api.GetAssetsBalance(fromAccount.Id, assetID)
-	//if err != nil || balance == nil {
-	//	return nil, openwallet.Errorf(openwallet.ErrInsufficientBalanceOfAccount, "all address's balance of account is not enough")
-	//}
-
-	accountBalanceDec, _ := decimal.NewFromString(fromAccount.Balance)
-	minTransfer = minTransfer.Shift(int32(precise))
-	retainedBalance = retainedBalance.Shift(int32(precise))
-
-	if accountBalanceDec.LessThan(minTransfer) || accountBalanceDec.LessThanOrEqual(decimal.Zero) {
-		return rawTxArray, nil
-	}
-
-	//计算汇总数量 = 余额 - 保留余额
-	sumAmount := accountBalanceDec.Sub(retainedBalance)
-
-	amountInt64 := sumAmount.IntPart()
-	memo := sumRawTx.GetExtParam().Get("memo").String()
-
-	decoder.wm.Log.Debugf("balance: %v", accountBalanceDec.String())
-	decoder.wm.Log.Debugf("fees: %d", 0)
-	decoder.wm.Log.Debugf("sumAmount: %v", sumAmount)
-
-	asset := bt.AssetIDFromObject(bt.NewAssetID(assetID.String()))
-	amount := bt.AssetAmount{
-		Asset:  asset,
-		Amount: bt.Int64(amountInt64),
-	}
-
-	op := operations.TransferOperation{
-		Amount:     amount,
-		Extensions: bt.Extensions{},
-		//From:       bt.AccountIDFromObject(bt.NewAccountID(fromAccount.Id)),
-		//To:         bt.AccountIDFromObject(bt.NewAccountID(toAccount.Id)),
-	}
-
-	fromPublicKey, _ := bt.NewPublicKeyFromString(fromAccount.MemoKey)
-	toPublicKey, _ := bt.NewPublicKeyFromString(toAccount.MemoKey)
-
-	if memo != "" {
-		m := bt.Memo{
-			From:  *fromPublicKey,
-			To:    *toPublicKey,
-			Nonce: bt.UInt64(rand.Uint64()),
-		}
-		keyBag := crypto.NewKeyBag()
-		keyBag.Add(decoder.wm.Config.MemoPrivateKey)
-
-		if err := keyBag.EncryptMemo(&m, memo); err != nil {
-			return nil, fmt.Errorf("EncryptMemo: %v", err)
-		}
-
-		op.Memo = &m
-	}
-
-	ops := &bt.Operations{&op}
-	operations := bt.Operations(*ops)
-	fees, err := decoder.wm.Api.GetRequiredFee(operations, assetID.String())
-	if err != nil {
-		return nil, openwallet.Errorf(openwallet.ErrCreateRawTransactionFailed, "can't get fees")
-	}
-
-	feesDec := decimal.Zero
-	for _, fee := range fees {
-		feesDec = feesDec.Add(decimal.New(int64(fee.Amount), 0))
-	}
-
-	if err := operations.ApplyFees(fees); err != nil {
-		return nil, openwallet.Errorf(openwallet.ErrCreateRawTransactionFailed, "ApplyFees")
-	}
-	op.Amount.Amount = bt.Int64(sumAmount.Sub(feesDec).IntPart())
-
-	//创建一笔交易单
-	rawTx := &openwallet.RawTransaction{
-		Coin:    sumRawTx.Coin,
-		Account: sumRawTx.Account,
-		To: map[string]string{
-			sumRawTx.SummaryAddress: sumAmount.Sub(feesDec).String(),
-		},
-		Required: 1,
-	}
-
-	createTxErr := decoder.createRawTransaction(
-		wrapper,
-		rawTx,
-		&accountBalanceDec,
-		account.Alias,
-		ops,
-		feesDec,
-		memo)
-	rawTxWithErr := &openwallet.RawTransactionWithError{
-		RawTx: rawTx,
-		Error: createTxErr,
-	}
-
-	//创建成功，添加到队列
-	rawTxArray = append(rawTxArray, rawTxWithErr)
-
-	return rawTxArray, nil
-}
+//func (decoder *TransactionDecoder) CreateSummaryRawTransactionWithError(wrapper openwallet.WalletDAI, sumRawTx *openwallet.SummaryRawTransaction) ([]*openwallet.RawTransactionWithError, error) {
+//
+//	var (
+//		rawTxArray = make([]*openwallet.RawTransactionWithError, 0)
+//		accountID  = sumRawTx.Account.AccountID
+//		assetID    types.ObjectID
+//		precise    uint64
+//	)
+//	sumRawTx.Coin.Contract = openwallet.SmartContract{Address: "1.3.0", Symbol: "BTS", Token: "BTS"}
+//	assetID = types.MustParseObjectID("1.3.0")
+//	precise = 5
+//
+//	minTransfer, _ := decimal.NewFromString(sumRawTx.MinTransfer)
+//	retainedBalance, _ := decimal.NewFromString(sumRawTx.RetainedBalance)
+//
+//	if minTransfer.LessThan(retainedBalance) {
+//		return nil, fmt.Errorf("mini transfer amount must be greater than address retained balance")
+//	}
+//
+//	//获取wallet
+//	account, err := wrapper.GetAssetsAccountInfo(accountID)
+//	if err != nil {
+//		return nil, err
+//	}
+//
+//	if account.Alias == "" {
+//		return nil, fmt.Errorf("[%s] have not been created", accountID)
+//	}
+//
+//	// 检查转出、目标账户是否存在
+//	accounts, err := decoder.wm.Api.GetAccounts(account.Alias, sumRawTx.SummaryAddress)
+//	if err != nil {
+//		return nil, openwallet.Errorf(openwallet.ErrAccountNotAddress, "accounts have not registered [%v] ", err)
+//	}
+//
+//	fromAccount := accounts[0]
+//	toAccount := accounts[1]
+//
+//	// 检查转出账户余额
+//	//balance, err := decoder.wm.Api.GetAssetsBalance(fromAccount.Id, assetID)
+//	//if err != nil || balance == nil {
+//	//	return nil, openwallet.Errorf(openwallet.ErrInsufficientBalanceOfAccount, "all address's balance of account is not enough")
+//	//}
+//
+//	accountBalanceDec, _ := decimal.NewFromString(fromAccount.Balance)
+//	minTransfer = minTransfer.Shift(int32(precise))
+//	retainedBalance = retainedBalance.Shift(int32(precise))
+//
+//	if accountBalanceDec.LessThan(minTransfer) || accountBalanceDec.LessThanOrEqual(decimal.Zero) {
+//		return rawTxArray, nil
+//	}
+//
+//	//计算汇总数量 = 余额 - 保留余额
+//	sumAmount := accountBalanceDec.Sub(retainedBalance)
+//
+//	amountInt64 := sumAmount.IntPart()
+//	memo := sumRawTx.GetExtParam().Get("memo").String()
+//
+//	decoder.wm.Log.Debugf("balance: %v", accountBalanceDec.String())
+//	decoder.wm.Log.Debugf("fees: %d", 0)
+//	decoder.wm.Log.Debugf("sumAmount: %v", sumAmount)
+//
+//	asset := bt.AssetIDFromObject(bt.NewAssetID(assetID.String()))
+//	amount := bt.AssetAmount{
+//		Asset:  asset,
+//		Amount: bt.Int64(amountInt64),
+//	}
+//
+//	op := operations.TransferOperation{
+//		Amount:     amount,
+//		Extensions: bt.Extensions{},
+//		//From:       bt.AccountIDFromObject(bt.NewAccountID(fromAccount.Id)),
+//		//To:         bt.AccountIDFromObject(bt.NewAccountID(toAccount.Id)),
+//	}
+//
+//	fromPublicKey, _ := bt.NewPublicKeyFromString(fromAccount.MemoKey)
+//	toPublicKey, _ := bt.NewPublicKeyFromString(toAccount.MemoKey)
+//
+//	if memo != "" {
+//		m := bt.Memo{
+//			From:  *fromPublicKey,
+//			To:    *toPublicKey,
+//			Nonce: bt.UInt64(rand.Uint64()),
+//		}
+//		keyBag := crypto.NewKeyBag()
+//		keyBag.Add(decoder.wm.Config.MemoPrivateKey)
+//
+//		if err := keyBag.EncryptMemo(&m, memo); err != nil {
+//			return nil, fmt.Errorf("EncryptMemo: %v", err)
+//		}
+//
+//		op.Memo = &m
+//	}
+//
+//	ops := &bt.Operations{&op}
+//	operations := bt.Operations(*ops)
+//	fees, err := decoder.wm.Api.GetRequiredFee(operations, assetID.String())
+//	if err != nil {
+//		return nil, openwallet.Errorf(openwallet.ErrCreateRawTransactionFailed, "can't get fees")
+//	}
+//
+//	feesDec := decimal.Zero
+//	for _, fee := range fees {
+//		feesDec = feesDec.Add(decimal.New(int64(fee.Amount), 0))
+//	}
+//
+//	if err := operations.ApplyFees(fees); err != nil {
+//		return nil, openwallet.Errorf(openwallet.ErrCreateRawTransactionFailed, "ApplyFees")
+//	}
+//	op.Amount.Amount = bt.Int64(sumAmount.Sub(feesDec).IntPart())
+//
+//	//创建一笔交易单
+//	rawTx := &openwallet.RawTransaction{
+//		Coin:    sumRawTx.Coin,
+//		Account: sumRawTx.Account,
+//		To: map[string]string{
+//			sumRawTx.SummaryAddress: sumAmount.Sub(feesDec).String(),
+//		},
+//		Required: 1,
+//	}
+//
+//	createTxErr := decoder.createRawTransaction(
+//		wrapper,
+//		rawTx,
+//		&accountBalanceDec,
+//		account.Alias,
+//		ops,
+//		memo)
+//	rawTxWithErr := &openwallet.RawTransactionWithError{
+//		RawTx: rawTx,
+//		Error: createTxErr,
+//	}
+//
+//	//创建成功，添加到队列
+//	rawTxArray = append(rawTxArray, rawTxWithErr)
+//
+//	return rawTxArray, nil
+//}
 
 //createRawTransaction
 func (decoder *TransactionDecoder) createRawTransaction(
@@ -458,8 +450,8 @@ func (decoder *TransactionDecoder) createRawTransaction(
 	rawTx *openwallet.RawTransaction,
 	balanceDec *decimal.Decimal,
 	from string,
-	ops *bt.Operations,
-	feesDec decimal.Decimal,
+	ops *txencoder.RawTransferOperation,
+	//feesDec decimal.Decimal,
 	memo string) *openwallet.Error {
 
 	var (
@@ -471,9 +463,6 @@ func (decoder *TransactionDecoder) createRawTransaction(
 		accountID        = rawTx.Account.AccountID
 		amountDec        = decimal.Zero
 		curveType        = decoder.wm.Config.CurveType
-		//assetID          = bt.NewAssetID(rawTx.Coin.Contract.Address)
-		precise    = rawTx.Coin.Contract.Decimals
-		operations = bt.Operations(*ops)
 	)
 	for k, v := range rawTx.To {
 		to = k
@@ -481,34 +470,27 @@ func (decoder *TransactionDecoder) createRawTransaction(
 		break
 	}
 
-	if balanceDec.LessThan(amountDec.Add(feesDec)) {
-		return openwallet.Errorf(openwallet.ErrCreateRawTransactionFailed, "the balance: %s is not enough", balanceDec.Shift(-int32(precise)))
-	}
-
 	info, err := decoder.wm.Api.GetBlockchainInfo()
 	if err != nil {
 		return openwallet.Errorf(openwallet.ErrCreateRawTransactionFailed, "GetBlockchainInfo")
 	}
 
-	j, _ := json.Marshal(info.HeadBlockID)
-	headBlockID := bt.String{}
-	headBlockID.UnmarshalJSON(j)
-	props := &bt.DynamicGlobalProperties{
-		HeadBlockID:              headBlockID,
-		HeadBlockNumber:          bt.UInt32(info.HeadBlockNum),
-		LastIrreversibleBlockNum: bt.UInt32(info.LastIrreversibleBlockNum),
+	tx := txencoder.RawTransaction{
+		RefBlockNum:    uint16(info.HeadBlockNum & 0xFFFF),
+		RefBlockPrefix: info.HeadBlockID[8:16],
+		Expiration:     time.Now().Add(30 * time.Second),
+		Signature:      &[]string{},
 	}
 
-	tx, err := bt.NewSignedTransactionWithBlockData(props)
+	*tx.Operations = append(*tx.Operations, ops)
+
+	signTx, err := tx.Encode()
 	if err != nil {
-		return openwallet.Errorf(openwallet.ErrCreateRawTransactionFailed, "NewTransaction")
+		return openwallet.Errorf(openwallet.ErrCreateRawTransactionFailed, "Encode tx error : %v", err)
 	}
-
-	tx.Operations = operations
-	signer := crypto.NewTransactionSigner(tx)
 
 	//交易哈希
-	digest, err := signer.Digest(config.Current())
+	digest, err := signTx.Digest(decoder.wm.Config.ChainId)
 	if err != nil {
 		return openwallet.Errorf(openwallet.ErrCreateRawTransactionFailed, "Calculate digest error: %v", err)
 	}
@@ -534,9 +516,6 @@ func (decoder *TransactionDecoder) createRawTransaction(
 	}
 
 	//计算账户的实际转账amount
-	if from != to {
-		accountTotalSent = accountTotalSent.Add(amountDec).Add(feesDec)
-	}
 	accountTotalSent = decimal.Zero.Sub(accountTotalSent)
 
 	txFrom = []string{fmt.Sprintf("%s:%s", from, amountDec.String())}
@@ -546,11 +525,11 @@ func (decoder *TransactionDecoder) createRawTransaction(
 		rawTx.Signatures = make(map[string][]*openwallet.KeySignature)
 	}
 
-	jsonTx, _ := tx.MarshalJSON()
-	rawTx.RawHex = hex.EncodeToString(jsonTx)
+	serialized := signTx.Encode()
+	rawTx.RawHex = hex.EncodeToString(*serialized)
 	rawTx.Signatures[rawTx.Account.AccountID] = keySignList
 	rawTx.FeeRate = "0"
-	rawTx.Fees = feesDec.Shift(-3).String()
+	rawTx.Fees = "0"
 	rawTx.IsBuilt = true
 	rawTx.TxAmount = accountTotalSent.Shift(-5).String()
 	rawTx.TxFrom = txFrom

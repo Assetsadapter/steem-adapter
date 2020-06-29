@@ -1,23 +1,26 @@
 package addrdec
 
 import (
+	"crypto/sha256"
 	"fmt"
-	"github.com/blocktree/openwallet/openwallet"
 	"strings"
+
+	"github.com/blocktree/go-owcrypt"
+
+	"github.com/blocktree/openwallet/openwallet"
 
 	"github.com/blocktree/go-owcdrivers/addressEncoder"
 )
 
 var (
-	BTSPublicKeyPrefix       = "PUB_"
-	BTSPublicKeyK1Prefix     = "PUB_K1_"
-	BTSPublicKeyR1Prefix     = "PUB_R1_"
-	BTSPublicKeyPrefixCompat = "STM"
+	STMMainNetPublicKeyPrefixCompat = "STM"
+	STMTestNetPublicKeyPrefixCompat = "TST"
 
-	//BTS stuff
-	BTS_mainnetPublic = addressEncoder.AddressType{"STM", addressEncoder.BTCAlphabet, "ripemd160", "", 33, []byte(BTSPublicKeyPrefixCompat), nil}
-	// BTS_mainnetPrivateWIF           = AddressType{"base58", BTCAlphabet, "doubleSHA256", "", 32, []byte{0x80}, nil}
-	//BTS_mainnetPrivateWIFCompressed = addressEncoder.AddressType{"base58", addressEncoder.BTCAlphabet, "doubleSHA256", "", 32, []byte{0x80}, []byte{0x01}}
+	//STM stuff
+	STM_mainnetPublic               = addressEncoder.AddressType{"base58", addressEncoder.BTCAlphabet, "ripemd160", "", 33, []byte(STMMainNetPublicKeyPrefixCompat), nil}
+	STM_testnetPublic               = addressEncoder.AddressType{"base58", addressEncoder.BTCAlphabet, "ripemd160", "", 33, []byte(STMTestNetPublicKeyPrefixCompat), nil}
+	STM_mainnetPrivateWIF           = addressEncoder.AddressType{"base58", addressEncoder.BTCAlphabet, "doubleSHA256", "", 32, []byte{0x80}, nil}
+	STM_mainnetPrivateWIFCompressed = addressEncoder.AddressType{"base58", addressEncoder.BTCAlphabet, "doubleSHA256", "", 32, []byte{0x80}, []byte{0x01}}
 
 	Default = AddressDecoderV2{}
 )
@@ -36,31 +39,66 @@ func NewAddressDecoderV2() *AddressDecoderV2 {
 
 // AddressDecode decode address
 func (dec *AddressDecoderV2) AddressDecode(pubKey string, opts ...interface{}) ([]byte, error) {
-
 	var pubKeyMaterial string
-	if strings.HasPrefix(pubKey, BTSPublicKeyR1Prefix) {
-		pubKeyMaterial = pubKey[len(BTSPublicKeyR1Prefix):] // strip "PUB_R1_"
-	} else if strings.HasPrefix(pubKey, BTSPublicKeyK1Prefix) {
-		pubKeyMaterial = pubKey[len(BTSPublicKeyK1Prefix):] // strip "PUB_K1_"
-	} else if strings.HasPrefix(pubKey, BTSPublicKeyPrefixCompat) { // "BTS"
-		pubKeyMaterial = pubKey[len(BTSPublicKeyPrefixCompat):] // strip "BTS"
+	if strings.HasPrefix(pubKey, STMMainNetPublicKeyPrefixCompat) { // "STM"
+		pubKeyMaterial = pubKey[len(STMMainNetPublicKeyPrefixCompat):] // strip "STM"
+	} else if strings.HasPrefix(pubKey, STMTestNetPublicKeyPrefixCompat) { // "TST"
+		pubKeyMaterial = pubKey[len(STMTestNetPublicKeyPrefixCompat):] // strip "TST"
 	} else {
-		return nil, fmt.Errorf("public key should start with [%q | %q] (or the old %q)", BTSPublicKeyK1Prefix, BTSPublicKeyR1Prefix, BTSPublicKeyPrefixCompat)
+		return nil, fmt.Errorf("public key should start with [%q]", STMMainNetPublicKeyPrefixCompat)
 	}
-
-	ret, err := addressEncoder.Base58Decode(pubKeyMaterial, addressEncoder.NewBase58Alphabet(BTS_mainnetPublic.Alphabet))
+	ret, err := addressEncoder.Base58Decode(pubKeyMaterial, addressEncoder.NewBase58Alphabet(STM_mainnetPublic.Alphabet))
 	if err != nil {
 		return nil, addressEncoder.ErrorInvalidAddress
 	}
-	if addressEncoder.VerifyChecksum(ret, BTS_mainnetPublic.ChecksumType) == false {
+	if addressEncoder.VerifyChecksum(ret, STM_mainnetPublic.ChecksumType) == false {
 		return nil, addressEncoder.ErrorInvalidAddress
 	}
-
 	return ret[:len(ret)-4], nil
 }
 
 // AddressEncode encode address
 func (dec *AddressDecoderV2) AddressEncode(hash []byte, opts ...interface{}) (string, error) {
-	data := addressEncoder.CatData(hash, addressEncoder.CalcChecksum(hash, BTS_mainnetPublic.ChecksumType))
-	return string(BTS_mainnetPublic.Prefix) + addressEncoder.EncodeData(data, "base58", BTS_mainnetPublic.Alphabet), nil
+	pubType := STM_mainnetPublic
+	if dec.IsTestNet {
+		pubType = STM_testnetPublic
+	}
+	data := addressEncoder.CatData(hash, addressEncoder.CalcChecksum(hash, pubType.ChecksumType))
+	return string(pubType.Prefix) + addressEncoder.EncodeData(data, pubType.EncodeType, pubType.Alphabet), nil
+}
+
+func GetRoleCompressKey(accountName, role, password string, curveType uint32) ([]byte, error) {
+	priKey, err := CalculateAccountRolePrivateKey(accountName, role, password)
+	if err != nil {
+		return nil, err
+	}
+	comPriKey, err := GetCompPubKey(priKey, curveType)
+	if err != nil {
+		return nil, err
+	}
+	return comPriKey, nil
+}
+
+// 计算角色私钥
+func CalculateAccountRolePrivateKey(accountName, role, password string) ([]byte, error) {
+	if 0 == len(accountName) || 0 == len(role) || 0 == len(password) {
+		return nil, fmt.Errorf("invalied args")
+	}
+	sha := sha256.New()
+	_, err := sha.Write([]byte(accountName + role + password))
+	if err != nil {
+		return nil, err
+	}
+	priKey := sha.Sum(nil)
+	return priKey, err
+}
+
+// 获取角色的压缩公钥
+func GetCompPubKey(priKey []byte, curveType uint32) ([]byte, error) {
+	pubKye, ret := owcrypt.GenPubkey(priKey, curveType)
+	if ret != owcrypt.SUCCESS {
+		return nil, fmt.Errorf("GenPubKey failed code is : %d", ret)
+	}
+	compPubKey := owcrypt.PointCompress(pubKye, curveType)
+	return compPubKey, nil
 }

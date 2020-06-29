@@ -19,7 +19,6 @@ import (
 	"github.com/Assetsadapter/steem-adapter/addrdec"
 	"github.com/blocktree/openwallet/log"
 	"github.com/blocktree/openwallet/openwallet"
-	"github.com/denkhaus/bitshares"
 	"github.com/denkhaus/bitshares/config"
 )
 
@@ -35,7 +34,8 @@ type WalletManager struct {
 	ContractDecoder openwallet.SmartContractDecoder //智能合约解析器
 	Blockscanner    *BtsBlockScanner                //区块扫描器
 	CacheManager    openwallet.ICacheManager        //缓存管理器
-	WebsocketAPI    bitshares.WebsocketAPI          //steem WebsocketAPI
+	WebsocketAPI    string                          //steem WebsocketAPI
+	ChainId         string
 }
 
 func NewWalletManager(cacheManager openwallet.ICacheManager) *WalletManager {
@@ -50,12 +50,12 @@ func NewWalletManager(cacheManager openwallet.ICacheManager) *WalletManager {
 	wm.CacheManager = cacheManager
 	wm.ContractDecoder = NewContractDecoder(&wm)
 
-	wm.WebsocketAPI = NewWebsocketAPI(wm.Config.ServerWS)
-	privateNetConfig :=config.ChainConfig{
+	//wm.WebsocketAPI = NewWebsocketAPI(wm.Config.ServerWS)
+	privateNetConfig := config.ChainConfig{
 		Name:      "private_net",
 		CoreAsset: "CORE",
 		Prefix:    "STM",
-		ID:"08c5839c0f1c1a0acae7f2e33978a21168b2c1b5f78059f902bc0c3977fff163",
+		ID:        "08c5839c0f1c1a0acae7f2e33978a21168b2c1b5f78059f902bc0c3977fff163",
 	}
 	config.Add(privateNetConfig)
 	config.SetCurrent("08c5839c0f1c1a0acae7f2e33978a21168b2c1b5f78059f902bc0c3977fff163")
@@ -63,7 +63,7 @@ func NewWalletManager(cacheManager openwallet.ICacheManager) *WalletManager {
 	return &wm
 }
 
-func NewWebsocketAPI(api string) bitshares.WebsocketAPI {
-	config.SetCurrent(config.ChainIDBTS)
-	return bitshares.NewWebsocketAPI(api)
-}
+//func NewWebsocketAPI(api string) bitshares.WebsocketAPI {
+//	config.SetCurrent(config.ChainIDBTS)
+//	return bitshares.NewWebsocketAPI(api)
+//}

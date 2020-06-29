@@ -2,14 +2,27 @@ package txencoder
 
 import (
 	"encoding/hex"
+	"fmt"
+	"strconv"
+	"strings"
 	"time"
 )
 
+const (
+	NAI_STEEM = "STEEM"
+	NAI_SDB   = "SDB"
+	NAI_TESTS = "TESTS"
+	NAI_VESTS = "VESTS"
+	NAI_HDB   = "HDB"
+	NAI_HIVE  = "HIVE"
+)
+
 type RawTransaction struct {
-	RefBlockNum    uint16
-	RefBlockPrefix string
-	Expiration     time.Time
-	Operations     *[]RawOperation
+	RefBlockNum    uint16          // 参考的区块号
+	RefBlockPrefix string          // 参考区块id
+	Expiration     time.Time       // 交易到期时间
+	Operations     *[]RawOperation // 交易操作
+	Signature      *[]string       // 交易签名
 }
 
 type RawOperation interface {
@@ -42,6 +55,40 @@ type RawAmount struct {
 	Amount    uint64
 	Precision uint8
 	Nai       string
+}
+
+func GetPrecision(coin string) uint8 {
+	switch coin {
+	case NAI_VESTS:
+		return 6
+	case NAI_HDB:
+		fallthrough
+	case NAI_HIVE:
+		fallthrough
+	case NAI_SDB:
+		fallthrough
+	case NAI_STEEM:
+		fallthrough
+	case NAI_TESTS:
+		return 3
+	}
+	return 3
+}
+
+func CreateAmount(amount, nai string) (*RawAmount, error) {
+	spl := strings.Split(amount, " ")
+	if 2 != len(spl) {
+		return nil, fmt.Errorf("Invalid amount ")
+	}
+	amo, err := strconv.ParseUint(spl[0], 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	return &RawAmount{
+		Amount:    amo,
+		Precision: GetPrecision(spl[1]),
+		Nai:       spl[1],
+	}, nil
 }
 
 func (rt *RawTransaction) Encode() (*Transaction, error) {

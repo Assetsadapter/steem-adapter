@@ -7,9 +7,10 @@ import (
 )
 
 func TestTransaction_Encode(t *testing.T) {
+	refBlockId := "0007db3dfa79a5e7f81f3f620517db1dfd13656c"
 	rawTx := RawTransaction{
-		RefBlockNum:    486639 & 0xFFFF,
-		RefBlockPrefix: "66f42506",
+		RefBlockNum:    514877 & 0xFFFF,
+		RefBlockPrefix: refBlockId[8:16],
 		Expiration:     time.Now(),
 		Operations: &[]RawOperation{
 			&RawTransferOperation{

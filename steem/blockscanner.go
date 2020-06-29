@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Assetsadapter/steem-adapter/txencoder"
+
 	"github.com/shopspring/decimal"
 
 	"github.com/Assetsadapter/steem-adapter/types"
@@ -407,21 +409,17 @@ func (bs *BtsBlockScanner) InitExtractResult(sourceKey string, operation *types.
 
 	token := operation.Value.Amount.Nai
 	amount, _ := decimal.NewFromString(common.NewString(operation.Value.Amount.Amount).String())
+	//amount = amount.Shift(int32(txencoder.GetPrecision(operation.Value.Amount.Nai)))
 	transferFee := decimal.Zero
-	//if operation.Fee.AssetID.String() == "1.3.0" {
-	//	transferFee, _ = decimal.NewFromString(common.NewString(operation.Value.Fee.Amount).String())
-	//	transferFee = transferFee.Div(decimal.New(1, 5))
-	//}
-	contractID := openwallet.GenContractID(bs.wm.Symbol(), token)
+	//contractID := openwallet.GenContractID(bs.wm.Symbol(), token)
 	var coin openwallet.Coin
-	//BTS 资产 assetsId 1.3.0
 	if token == SteemNai {
-		amount = amount.Div(decimal.New(1, 5))
+		amount = amount.Div(decimal.New(1, int32(txencoder.GetPrecision(operation.Value.Amount.Nai))))
 		coin = openwallet.Coin{
 			Symbol:     bs.wm.Symbol(),
 			IsContract: false,
 		}
-	} else { //其它资产
+	} /*else { //其它资产
 		coin = openwallet.Coin{
 			Symbol:     bs.wm.Symbol(),
 			IsContract: true,
@@ -433,7 +431,7 @@ func (bs *BtsBlockScanner) InitExtractResult(sourceKey string, operation *types.
 				Token:      token,
 			},
 		}
-	}
+	}*/
 
 	accounts, err := bs.wm.Api.GetAccounts(operation.Value.From, operation.Value.To)
 	if len(accounts) != 2 {
@@ -443,15 +441,6 @@ func (bs *BtsBlockScanner) InitExtractResult(sourceKey string, operation *types.
 	from := accounts[0]
 	to := accounts[1]
 	var memoText = operation.Value.Memo
-	//如果交易有memo,解密加密的memo Message
-	//if len(operation.Memo.Message) > 0 {
-	//	nonce, _ := strconv.ParseUint(operation.Value.Memo.Nonce, 10, 64)
-	//	memoText, err = encoding_.Decrypt(operation.Memo.Message.String(), from.Options.MemoKey, to.Options.MemoKey, nonce, bs.wm.Config.MemoPrivateKey)
-	//	if err != nil {
-	//		bs.wm.Log.Std.Error("cannot get transaction memo, txId=%s  \n err= %v", result.TxID, err)
-	//
-	//	}
-	//}
 	transx := &openwallet.Transaction{
 		Fees:        transferFee.String(),
 		Coin:        coin,

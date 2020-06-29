@@ -71,7 +71,7 @@ func (wm *WalletManager) LoadAssetsConfig(c config.Configer) error {
 	wm.Config.MemoPrivateKey = c.String("memoPrivateKey")
 	wm.Api = NewWalletClient(wm.Config.ServerAPI, wm.Config.WalletAPI, false)
 	wm.Config.DataDir = c.String("dataDir")
-
+	wm.Config.ChainId = c.String("chainId")
 	//数据文件夹
 	wm.Config.makeDataDir()
 	return nil

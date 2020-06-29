@@ -1,8 +1,12 @@
 package txencoder
 
 import (
+	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"time"
+
+	"github.com/juju/errors"
 
 	"github.com/prometheus/common/log"
 )
@@ -137,4 +141,37 @@ func (tx *Transaction) DecodeRaw() interface{} {
 	}
 	ret.Operations = &rawOps
 	return ret
+}
+
+func (tx Transaction) Digest(chainId string) ([]byte, error) {
+	if chainId == "" {
+		return nil, fmt.Errorf("Chain id not by empty ")
+	}
+
+	writer := sha256.New()
+	rawChainID, err := hex.DecodeString(chainId)
+	if err != nil {
+		return nil, errors.Annotatef(err, "failed to decode chain ID: %v", chainId)
+	}
+
+	//	digestChainID := sha256.Sum256(rawChainID)
+	//	util.Dump("digest chainID", hex.EncodeToString(digestChainID[:]))
+
+	if _, err := writer.Write(rawChainID); err != nil {
+		return nil, errors.Annotate(err, "Write [chainID]")
+	}
+
+	rawTrx := tx.Encode()
+
+	//	digestTrx := sha256.Sum256(rawTrx)
+	//	util.Dump("digest trx", hex.EncodeToString(digestTrx[:]))
+
+	if _, err := writer.Write(*rawTrx); err != nil {
+		return nil, errors.Annotate(err, "Write [trx]")
+	}
+
+	digest := writer.Sum(nil)
+	//	util.Dump("digest trx all", hex.EncodeToString(digest[:]))
+
+	return digest[:], nil
 }

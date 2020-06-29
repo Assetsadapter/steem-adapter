@@ -15,6 +15,7 @@ require (
 	github.com/denkhaus/bitshares v0.6.1-0.20190502142618-5ae8c00cb394
 	github.com/go-steem/rpc v0.10.0 // indirect
 	github.com/imroc/req v0.2.3
+	github.com/juju/errors v0.0.0-20181118221551-089d3ea4e4d5
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/common v0.6.0
 	github.com/shopspring/decimal v0.0.0-20180709203117-cd690d0c9e24

@@ -24,10 +24,6 @@ type addressDecoder struct {
 	wm *WalletManager //钱包管理者
 }
 
-var (
-	STM_mainnetPrivateWIFCompressed = addressEncoder.AddressType{"base58", addressEncoder.BTCAlphabet, "doubleSHA256", "", 32, []byte{0x80}, nil}
-)
-
 //NewAddressDecoder 地址解析器
 func NewAddressDecoder(wm *WalletManager) *addressDecoder {
 	decoder := addressDecoder{}
@@ -37,21 +33,13 @@ func NewAddressDecoder(wm *WalletManager) *addressDecoder {
 
 //PrivateKeyToWIF 私钥转WIF
 func (decoder *addressDecoder) PrivateKeyToWIF(priv []byte, isTestnet bool) (string, error) {
-	//var private_key = this.toBuffer();
-	//// checksum includes the version
-	//private_key = Buffer.concat([new Buffer([0x80]), private_key]);
-	//var checksum = hash.sha256(private_key);
-	//checksum = hash.sha256(checksum);
-	//checksum = checksum.slice(0, 4);
-	//var private_wif = Buffer.concat([private_key, checksum]);
-	//return base58.encode(private_wif);
-	wif := addressEncoder.AddressEncode(priv, STM_mainnetPrivateWIFCompressed)
+	wif := addressEncoder.AddressEncode(priv, addrdec.STM_mainnetPrivateWIF)
 	return wif, nil
 }
 
 //PublicKeyToAddress 公钥转地址
 func (decoder *addressDecoder) PublicKeyToAddress(pub []byte, isTestnet bool) (string, error) {
-	address, err := addrdec.Default.AddressEncode(pub)
+	address, err := addrdec.Default.AddressEncode(pub, isTestnet)
 	return address, err
 }
 
