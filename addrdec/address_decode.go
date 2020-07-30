@@ -17,12 +17,12 @@ var (
 	STMTestNetPublicKeyPrefixCompat = "TST"
 
 	//STM stuff
-	STM_mainnetPublic               = addressEncoder.AddressType{"base58", addressEncoder.BTCAlphabet, "ripemd160", "", 33, []byte(STMMainNetPublicKeyPrefixCompat), nil}
-	STM_testnetPublic               = addressEncoder.AddressType{"base58", addressEncoder.BTCAlphabet, "ripemd160", "", 33, []byte(STMTestNetPublicKeyPrefixCompat), nil}
-	STM_mainnetPrivateWIF           = addressEncoder.AddressType{"base58", addressEncoder.BTCAlphabet, "doubleSHA256", "", 32, []byte{0x80}, nil}
-	STM_mainnetPrivateWIFCompressed = addressEncoder.AddressType{"base58", addressEncoder.BTCAlphabet, "doubleSHA256", "", 32, []byte{0x80}, []byte{0x01}}
+	STM_mainnetPublic        = addressEncoder.AddressType{"base58", addressEncoder.BTCAlphabet, "ripemd160", "", 33, []byte(STMMainNetPublicKeyPrefixCompat), nil}
+	STM_testnetPublic        = addressEncoder.AddressType{"base58", addressEncoder.BTCAlphabet, "ripemd160", "", 33, []byte(STMTestNetPublicKeyPrefixCompat), nil}
+	STM_PrivateWIF           = addressEncoder.AddressType{"base58", addressEncoder.BTCAlphabet, "doubleSHA256", "", 32, []byte{0x80}, nil}
+	STM_PrivateWIFCompressed = addressEncoder.AddressType{"base58", addressEncoder.BTCAlphabet, "doubleSHA256", "", 32, []byte{0x80}, []byte{0x01}}
 
-	Default = AddressDecoderV2{}
+	Default = AddressDecoderV2{IsTestNet: true}
 )
 
 //AddressDecoderV2

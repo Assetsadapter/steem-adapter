@@ -343,7 +343,9 @@ func (bs *BtsBlockScanner) ExtractTransaction(blockHeight uint64, blockHash stri
 		return ExtractResult{Success: true}
 	}
 	for _, transferOperation := range transaction.Operations {
-
+		if transferOperation.Type != "transfer_operation" {
+			continue
+		}
 		//if transferOperation, ok := operation.(*types.TransferOperation); ok {
 
 		txID := transaction.TransactionID

@@ -3,6 +3,7 @@ package txsigner
 import (
 	"bytes"
 	"crypto/sha256"
+	"fmt"
 	"math/big"
 
 	owcrypt "github.com/blocktree/go-owcrypt"
@@ -57,7 +58,7 @@ func generateRandomFromNonce(privateKey, hash []byte, nonce int) []byte {
 	if nonce > 0 {
 		moreHash := sha256.New()
 		moreHash.Write(hash)
-		moreHash.Write(bytes.Repeat([]byte{0x00}, nonce))
+		moreHash.Write([]byte(fmt.Sprintf("%d", nonce)))
 		hash = moreHash.Sum(nil)
 	}
 

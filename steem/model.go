@@ -23,9 +23,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Assetsadapter/steem-adapter/encoding"
+
 	"github.com/pkg/errors"
 
-	"github.com/Assetsadapter/steem-adapter/encoding_"
 	"github.com/Assetsadapter/steem-adapter/types"
 	"github.com/blocktree/openwallet/common"
 	"github.com/blocktree/openwallet/crypto"
@@ -58,7 +59,7 @@ func NewBlockHeader(result *gjson.Result) *BlockHeader {
 
 func (block *BlockHeader) Serialize() ([]byte, error) {
 	var b bytes.Buffer
-	encoder := encoding_.NewEncoder(&b)
+	encoder := encoding.NewEncoder(&b)
 
 	if err := encoder.Encode(block); err != nil {
 		return nil, err
@@ -93,9 +94,9 @@ func (block *BlockHeader) CalculateID() (string, error) {
 }
 
 // MarshalBlockHeader implements encoding_.Marshaller interface.
-func (block *BlockHeader) Marshal(encoder *encoding_.Encoder) error {
+func (block *BlockHeader) Marshal(encoder *encoding.Encoder) error {
 
-	enc := encoding_.NewRollingEncoder(encoder)
+	enc := encoding.NewRollingEncoder(encoder)
 
 	enc.Encode(block.TransactionMerkleRoot)
 	enc.Encode(block.Previous)

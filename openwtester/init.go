@@ -1,7 +1,7 @@
 package openwtester
 
 import (
-	"github.com/Assetsadapter/bitshares-adapter/steem"
+	"github.com/Assetsadapter/steem-adapter/steem"
 	"github.com/blocktree/openwallet/log"
 	"github.com/blocktree/openwallet/openw"
 )

@@ -33,13 +33,13 @@ func NewAddressDecoder(wm *WalletManager) *addressDecoder {
 
 //PrivateKeyToWIF 私钥转WIF
 func (decoder *addressDecoder) PrivateKeyToWIF(priv []byte, isTestnet bool) (string, error) {
-	wif := addressEncoder.AddressEncode(priv, addrdec.STM_mainnetPrivateWIF)
+	wif := addressEncoder.AddressEncode(priv, addrdec.STM_PrivateWIF)
 	return wif, nil
 }
 
 //PublicKeyToAddress 公钥转地址
 func (decoder *addressDecoder) PublicKeyToAddress(pub []byte, isTestnet bool) (string, error) {
-	address, err := addrdec.Default.AddressEncode(pub, isTestnet)
+	address, err := addrdec.Default.AddressEncode(pub, addrdec.Default.IsTestNet)
 	return address, err
 }
 

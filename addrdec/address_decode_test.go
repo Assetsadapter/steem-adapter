@@ -49,8 +49,9 @@ func TestAddressDecoderV2_AddressDecode(t *testing.T) {
 }
 
 func TestCalculateAccountRolePrivateKey(t *testing.T) {
-	accountName := "exx-exchange"
-	password := "5JnBXrZRh3KCemXMBGxToPViZPLumA1os8Cnx4hepLHLJtrrkGS"
+	//tagetActivePrivateKey := "bebfaedefcca779bcbc042b37f6212988c1e1fd1e38ef9e6f8cf061065967e64"
+	accountName := "exx-withdraw"
+	password := "5KQ3aSN53ci5QQEn8ebm8MK9fQ6ra5JZ6VaaBrf1c8wu7FR3QKX"
 	rolesMap := map[string]string{
 		"owner":   "",
 		"active":  "",
@@ -64,7 +65,7 @@ func TestCalculateAccountRolePrivateKey(t *testing.T) {
 			t.Errorf("calculateAccountRolePrivateKey failed : %s", err.Error())
 			t.FailNow()
 		}
-		wifPriKey := addressEncoder.AddressEncode(priKey, STM_mainnetPrivateWIF)
+		wifPriKey := addressEncoder.AddressEncode(priKey, STM_PrivateWIF)
 		comPriKey, err := GetCompPubKey(priKey, owcrypt.ECC_CURVE_SECP256K1)
 		if err != nil {
 			t.Errorf("GetCompPubKey failed : %s", err.Error())

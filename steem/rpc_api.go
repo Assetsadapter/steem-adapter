@@ -2,6 +2,7 @@ package steem
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -208,6 +209,18 @@ func (c *WalletClient) GetBlockchainInfo() (*BlockchainInfo, error) {
 	return info, nil
 }
 
+func (c *WalletClient) GetTransactionHex(rawTx interface{}) ([]byte, error) {
+	r, err := c.call("condenser_api.get_transaction_hex", []interface{}{rawTx}, false, false)
+	if err != nil {
+		return nil, err
+	}
+	ret, err := hex.DecodeString(r.String())
+	if err != nil {
+		return nil, err
+	}
+	return ret, nil
+}
+
 // GetBlockByHeight returns a certain block
 func (c *WalletClient) GetBlockByHeight(height uint32) (*Block, error) {
 	r, err := c.call("block_api.get_block", map[string]interface{}{"block_num": height}, false, false)
@@ -303,10 +316,10 @@ func (c *WalletClient) GetRequiredFee(ops []bt.Operation, assetID string) ([]bt.
 }
 
 // BroadcastTransaction broadcast a transaction
-func (c *WalletClient) BroadcastTransaction(tx *bt.SignedTransaction) (*BroadcastResponse, error) {
+func (c *WalletClient) BroadcastTransaction(tx interface{}) (*BroadcastResponse, error) {
 	resp := BroadcastResponse{}
 
-	r, err := c.call("broadcast_transaction", []interface{}{tx}, true, false)
+	r, err := c.call("condenser_api.broadcast_transaction", tx, false, false)
 	if err != nil {
 		return nil, err
 	}

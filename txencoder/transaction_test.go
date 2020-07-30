@@ -2,6 +2,8 @@ package txencoder
 
 import (
 	"encoding/hex"
+	"fmt"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -48,4 +50,19 @@ func TestTransaction_Decode(t *testing.T) {
 		t.Fail()
 	}
 	t.Logf("Decode transaction result : %v", rawTx)
+}
+
+func TestParseRefBlockPrefixToNumber(t *testing.T) {
+	refBlockPrefix := "f7860b82"
+	revByte, err := reverseHexToBytes(refBlockPrefix)
+	if err != nil {
+		t.Errorf("reverseHexToBytes failed : %s", err.Error())
+		t.FailNow()
+	}
+	prefix, err := strconv.ParseUint(hex.EncodeToString(revByte), 16, 64)
+	if err != nil {
+		t.Errorf("Parse uint failed : %s", err.Error())
+		t.FailNow()
+	}
+	fmt.Printf("refBlockPrefix number is : %d \n", prefix)
 }

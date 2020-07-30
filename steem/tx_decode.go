@@ -16,6 +16,7 @@
 package steem
 
 import (
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"strings"
@@ -24,11 +25,10 @@ import (
 	"github.com/Assetsadapter/steem-adapter/addrdec"
 
 	"github.com/Assetsadapter/steem-adapter/txencoder"
+	"github.com/juju/errors"
 
 	"github.com/Assetsadapter/steem-adapter/txsigner"
-	bt "github.com/denkhaus/bitshares/types"
-
-	owcrypt "github.com/blocktree/go-owcrypt"
+	"github.com/blocktree/go-owcrypt"
 	"github.com/blocktree/openwallet/openwallet"
 	"github.com/shopspring/decimal"
 )
@@ -92,6 +92,7 @@ func (decoder *TransactionDecoder) CreateRawTransaction(wrapper openwallet.Walle
 	amountNai := fromBalance[1]
 
 	accountBalanceDec, _ := decimal.NewFromString(amountBalance)
+	accountBalanceDec = accountBalanceDec.Shift(int32(precise))
 	amountDec, _ := decimal.NewFromString(amountStr)
 	amountDec = amountDec.Shift(int32(precise))
 
@@ -106,6 +107,7 @@ func (decoder *TransactionDecoder) CreateRawTransaction(wrapper openwallet.Walle
 		Type: 2,
 		From: fromAccount.Name,
 		To:   toAccount.Name,
+		//Amount: fromAccount.Balance,
 		Amount: txencoder.RawAmount{
 			Amount:    uint64(amountDec.IntPart()),
 			Precision: precise,
@@ -120,6 +122,7 @@ func (decoder *TransactionDecoder) CreateRawTransaction(wrapper openwallet.Walle
 		&accountBalanceDec,
 		account.Alias,
 		ops,
+		fromAccount.Balance,
 		memo)
 	if createTxErr != nil {
 		return createTxErr
@@ -152,12 +155,12 @@ func (decoder *TransactionDecoder) SignRawTransaction(wrapper openwallet.WalletD
 				return err
 			}
 
-			wifPriKey, err := decoder.wm.Decoder.PrivateKeyToWIF(keyBytes, true)
+			wifPriKey, err := decoder.wm.Decoder.PrivateKeyToWIF(keyBytes, false)
 			if err != nil {
 				return err
 			}
 
-			compPriKey, err := addrdec.GetRoleCompressKey(rawTx.TxFrom[0], "active", wifPriKey, CurveType)
+			rolePriKey, err := addrdec.CalculateAccountRolePrivateKey(strings.Split(rawTx.TxFrom[0], ":")[0], "active", wifPriKey)
 			if err != nil {
 				return err
 			}
@@ -169,12 +172,18 @@ func (decoder *TransactionDecoder) SignRawTransaction(wrapper openwallet.WalletD
 
 			decoder.wm.Log.Debug("hash:", hash)
 
-			sig, err := txsigner.Default.SignTransactionHash(hash, compPriKey, decoder.wm.CurveType())
+			sig, err := txsigner.Default.SignTransactionHash(hash, rolePriKey, keySignature.EccType)
 			if err != nil {
 				return fmt.Errorf("sign transaction hash failed, unexpected err: %v", err)
 			}
 
 			keySignature.Signature = hex.EncodeToString(sig)
+
+			compPubKey, ret := owcrypt.GenPubkey(rolePriKey, keySignature.EccType)
+			if ret != owcrypt.SUCCESS {
+				return fmt.Errorf("Signature GenPubKey failed code : %d", ret)
+			}
+			keySignature.Address.PublicKey = hex.EncodeToString(compPubKey)
 		}
 	}
 
@@ -213,12 +222,14 @@ func (decoder *TransactionDecoder) VerifyRawTransaction(wrapper openwallet.Walle
 			publicKey, _ := hex.DecodeString(keySignature.Address.PublicKey)
 
 			//验证签名，解压公钥，解压后首字节04要去掉
-			uncompessedPublicKey := owcrypt.PointDecompress(publicKey, decoder.wm.CurveType())
+			//uncompessedPublicKey := owcrypt.PointDecompress(publicKey, decoder.wm.CurveType())
 
-			valid, compactSig, err := txsigner.Default.VerifyAndCombineSignature(messsage, uncompessedPublicKey[1:], signature)
+			valid, compactSig, err := txsigner.Default.VerifyAndCombineSignature(messsage, publicKey, signature)
 			if !valid {
 				return fmt.Errorf("transaction verify failed: %v", err)
 			}
+
+			decoder.wm.Log.Errorf("Verify : %s", keySignature.Signature)
 
 			*tx.Signatures = append(
 				*tx.Signatures,
@@ -236,18 +247,23 @@ func (decoder *TransactionDecoder) VerifyRawTransaction(wrapper openwallet.Walle
 
 // SubmitRawTransaction 广播交易单
 func (decoder *TransactionDecoder) SubmitRawTransaction(wrapper openwallet.WalletDAI, rawTx *openwallet.RawTransaction) (*openwallet.Transaction, error) {
-
-	var stx bt.SignedTransaction
+	var (
+		stx txencoder.RawTransaction
+	)
 	txHex, err := hex.DecodeString(rawTx.RawHex)
 	if err != nil {
 		return nil, fmt.Errorf("transaction decode hex failed, unexpected error: %v", err)
 	}
-	err = stx.UnmarshalJSON(txHex)
+	err = stx.Decoder(txHex)
 	if err != nil {
 		return nil, fmt.Errorf("transaction decode json failed, unexpected error: %v", err)
 	}
 
-	resp, err := decoder.wm.Api.BroadcastTransaction(&stx)
+	bcJson := stx.ParseToBroadcastJson()
+
+	decoder.wm.Log.Infof("Broadcast transaction json is : %s", bcJson)
+
+	resp, err := decoder.wm.Api.BroadcastTransaction([]interface{}{bcJson})
 	if err != nil {
 		return nil, fmt.Errorf("push transaction: %s", err)
 	}
@@ -452,6 +468,7 @@ func (decoder *TransactionDecoder) createRawTransaction(
 	from string,
 	ops *txencoder.RawTransferOperation,
 	//feesDec decimal.Decimal,
+	fromBalance string,
 	memo string) *openwallet.Error {
 
 	var (
@@ -478,8 +495,10 @@ func (decoder *TransactionDecoder) createRawTransaction(
 	tx := txencoder.RawTransaction{
 		RefBlockNum:    uint16(info.HeadBlockNum & 0xFFFF),
 		RefBlockPrefix: info.HeadBlockID[8:16],
-		Expiration:     time.Now().Add(30 * time.Second),
-		Signature:      &[]string{},
+		Operations:     &[]txencoder.RawOperation{},
+		Expiration:     time.Now().Add(300 * time.Second),
+		Extensions:     &[]txencoder.Extension{},
+		Signatures:     &[]string{},
 	}
 
 	*tx.Operations = append(*tx.Operations, ops)
@@ -536,4 +555,27 @@ func (decoder *TransactionDecoder) createRawTransaction(
 	rawTx.TxTo = txTo
 
 	return nil
+}
+
+func Digest(txHex []byte, chainId string) ([]byte, error) {
+	if chainId == "" {
+		return nil, fmt.Errorf("Chain id not by empty ")
+	}
+
+	writer := sha256.New()
+	rawChainID, err := hex.DecodeString(chainId)
+	if err != nil {
+		return nil, errors.Annotatef(err, "failed to decode chain ID: %v", chainId)
+	}
+
+	if _, err := writer.Write(rawChainID); err != nil {
+		return nil, errors.Annotate(err, "Write [chainID]")
+	}
+
+	if _, err := writer.Write(txHex); err != nil {
+		return nil, errors.Annotate(err, "Write [trx]")
+	}
+
+	digest := writer.Sum(nil)
+	return digest[:], nil
 }

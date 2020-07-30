@@ -25,9 +25,7 @@ func init() {
 
 func testNewWalletManager() *WalletManager {
 	wm := NewWalletManager(nil)
-	//wm.Config.ServerAPI = "http://api.bts.ai/rpc"
-	wm.Config.ServerAPI =  "http://127.0.0.1:9876"
-	//wm.Config.WalletAPI= "http://1.wallet.info/btsws"
+	wm.Config.ServerAPI = "http://127.0.0.1:9876"
 
 	wm.Api = NewWalletClient(wm.Config.ServerAPI, wm.Config.WalletAPI, false)
 	return wm

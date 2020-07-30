@@ -76,12 +76,20 @@ func (tx *Transaction) Encode() *[]byte {
 	bytesData = append(bytesData, tx.RefBlockPrefix...)
 	bytesData = append(bytesData, tx.Expiration...)
 	bytesData = append(bytesData, byte(len(*tx.Operations)))
-	for _, op := range *tx.Operations {
-		opEncode := op.(TxEncoder)
-		bytesData = append(bytesData, *opEncode.Encode()...)
+	if len(*tx.Operations) > 0 {
+		for _, op := range *tx.Operations {
+			opEncode := op.(TxEncoder)
+			bytesData = append(bytesData, *opEncode.Encode()...)
+		}
 	}
 	bytesData = append(bytesData, byte(len(*tx.Extensions)))
 	bytesData = append(bytesData, byte(len(*tx.Signatures)))
+	if len(*tx.Signatures) > 0 {
+		for _, signature := range *tx.Signatures {
+			bytesData = append(bytesData, byte(len(signature)))
+			bytesData = append(bytesData, signature...)
+		}
+	}
 	return &bytesData
 }
 
@@ -122,7 +130,9 @@ func (tx *Transaction) Decode(offset int, data []byte) (int, error) {
 	tx.Signatures = &[]Signature{}
 	if signCount > 0 {
 		for i := signCount; i > 0; i-- {
-			*tx.Signatures = append(*tx.Signatures, data[index:index+signCount])
+			signLen := int(data[index])
+			index += 1
+			*tx.Signatures = append(*tx.Signatures, data[index:index+signLen])
 		}
 	}
 	return index, nil
@@ -154,24 +164,15 @@ func (tx Transaction) Digest(chainId string) ([]byte, error) {
 		return nil, errors.Annotatef(err, "failed to decode chain ID: %v", chainId)
 	}
 
-	//	digestChainID := sha256.Sum256(rawChainID)
-	//	util.Dump("digest chainID", hex.EncodeToString(digestChainID[:]))
-
 	if _, err := writer.Write(rawChainID); err != nil {
 		return nil, errors.Annotate(err, "Write [chainID]")
 	}
 
 	rawTrx := tx.Encode()
-
-	//	digestTrx := sha256.Sum256(rawTrx)
-	//	util.Dump("digest trx", hex.EncodeToString(digestTrx[:]))
-
 	if _, err := writer.Write(*rawTrx); err != nil {
 		return nil, errors.Annotate(err, "Write [trx]")
 	}
 
 	digest := writer.Sum(nil)
-	//	util.Dump("digest trx all", hex.EncodeToString(digest[:]))
-
 	return digest[:], nil
 }
