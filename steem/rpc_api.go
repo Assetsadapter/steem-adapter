@@ -70,6 +70,8 @@ func (c *WalletClient) call(method string, request interface{}, queryWalletAPI b
 
 	if c.Debug {
 		log.Std.Info("Start Request API...")
+		log.Std.Info("%+v", body)
+
 	}
 
 	host := c.ServerAPI
@@ -319,17 +321,14 @@ func (c *WalletClient) GetRequiredFee(ops []bt.Operation, assetID string) ([]bt.
 func (c *WalletClient) BroadcastTransaction(tx interface{}) (*BroadcastResponse, error) {
 	resp := BroadcastResponse{}
 
-	r, err := c.call("condenser_api.broadcast_transaction", tx, false, false)
+	r, err := c.call("condenser_api.broadcast_transaction_synchronous", tx, false, false)
 	if err != nil {
 		return nil, err
 	}
-	data := []interface{}{}
-	if err := json.Unmarshal([]byte(r.Raw), &data); err != nil {
+	if err := json.Unmarshal([]byte(r.Raw), &resp); err != nil {
 		return nil, err
 	}
-	if len(data) == 2 {
-		resp.ID = data[0].(string)
-	}
+
 	return &resp, err
 }
 

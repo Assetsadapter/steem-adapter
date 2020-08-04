@@ -1,5 +1,7 @@
 package txsigner
 
+import "fmt"
+
 var Default = &TransactionSigner{}
 
 type TransactionSigner struct {
@@ -18,9 +20,10 @@ func (singer *TransactionSigner) VerifyAndCombineSignature(msg, publicKey, signa
 		return false, nil, err
 	}
 
-	//if !isCanonical(compactSig) {
-	//	return false, nil, fmt.Errorf("it is not canonical signature")
-	//}
+	if !isCanonical(compactSig) {
+		return false, nil, fmt.Errorf("it is not canonical signature")
+	}
 
 	return true, compactSig, nil
+
 }

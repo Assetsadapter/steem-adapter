@@ -60,7 +60,8 @@ func (dec *AddressDecoderV2) AddressDecode(pubKey string, opts ...interface{}) (
 // AddressEncode encode address
 func (dec *AddressDecoderV2) AddressEncode(hash []byte, opts ...interface{}) (string, error) {
 	pubType := STM_mainnetPublic
-	if dec.IsTestNet {
+	isTestNet := (opts[0]).(bool)
+	if isTestNet {
 		pubType = STM_testnetPublic
 	}
 	data := addressEncoder.CatData(hash, addressEncoder.CalcChecksum(hash, pubType.ChecksumType))

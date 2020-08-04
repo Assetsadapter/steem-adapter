@@ -22,7 +22,7 @@ const (
 
 type RawTransaction struct {
 	RefBlockNum    uint16          `json:"ref_block_num"`    // 参考的区块号
-	RefBlockPrefix string          `json:"ref_block_prefix"` // 参考区块id
+	RefBlockPrefix uint32          `json:"ref_block_prefix"` // 参考区块id
 	Expiration     time.Time       `json:"expiration"`       // 交易到期时间
 	Operations     *[]RawOperation `json:"operations"`       // 交易操作
 	Extensions     *[]Extension    `json:"extensions"`       // 交易扩展
@@ -79,7 +79,7 @@ type RawTransferOperation struct {
 
 type TransferJson struct {
 	RefBlockNum    uint16        `json:"ref_block_num"`
-	RefBlockPrefix uint64        `json:"ref_block_prefix"`
+	RefBlockPrefix uint32        `json:"ref_block_prefix"`
 	Expiration     string        `json:"expiration"`
 	Operations     []interface{} `json:"operations"`
 	Extensions     []string      `json:"extensions"`
@@ -247,10 +247,13 @@ func (rt *RawTransaction) Decoder(data []byte) error {
 	return nil
 }
 
+const layout = "2006-01-02T15:04:05"
+
 func (rt *RawTransaction) decode(tx Transaction) error {
-	rt.RefBlockNum = littleEndianBytesToUint16(tx.RefBlockPrefix)
-	rt.RefBlockPrefix = hex.EncodeToString(tx.RefBlockPrefix)
-	rt.Expiration = time.Unix(int64(littleEndianBytesToUint32(tx.Expiration)), 8)
+	rt.RefBlockNum = littleEndianBytesToUint16(tx.RefBlockNum)
+	rt.RefBlockPrefix = littleEndianBytesToUint32(tx.RefBlockPrefix)
+	rt.Expiration = time.Unix(int64(littleEndianBytesToUint32(tx.Expiration)), 8).UTC()
+
 	rt.Operations = &[]RawOperation{}
 	if len(*tx.Operations) > 0 {
 		for _, op := range *tx.Operations {
@@ -298,21 +301,23 @@ func (rt *RawTransaction) decode(tx Transaction) error {
 */
 
 func (rt *RawTransaction) ParseToBroadcastJson() interface{} {
-	revRef, err := reverseHexToBytes(rt.RefBlockPrefix)
-	if err != nil {
-		panic(fmt.Sprintf("RefBlockPrefix reverseHexToBytes failed : %s", err.Error()))
-	}
-	refBlockPrefix, err := strconv.ParseUint(hex.EncodeToString(revRef), 16, 64)
-	if err != nil {
-		panic(fmt.Sprintf("Parse refBlockPrefix failed : %s", err.Error()))
-	}
+	//revRef, err := reverseHexToBytes(rt.RefBlockPrefix)
+	//if err != nil {
+	//	panic(fmt.Sprintf("RefBlockPrefix reverseHexToBytes failed : %s", err.Error()))
+	//}
+	//refBlockPrefix, err := strconv.ParseUint(hex.EncodeToString(revRef), 16, 64)
+	//
+	//
+	//if err != nil {
+	//	panic(fmt.Sprintf("Parse refBlockPrefix failed : %s", err.Error()))
+	//}
 	ops := []interface{}{}
 	for _, op := range *rt.Operations {
 		ops = append(ops, op.ParseToBroadcastJson())
 	}
 	txJson := TransferJson{
 		RefBlockNum:    rt.RefBlockNum,
-		RefBlockPrefix: refBlockPrefix,
+		RefBlockPrefix: rt.RefBlockPrefix,
 		Expiration:     rt.Expiration.Format("2006-01-02T15:04:05"),
 		Operations:     ops,
 		Extensions:     []string{},

@@ -17,18 +17,18 @@ package steem
 
 import (
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"github.com/Assetsadapter/steem-adapter/addrdec"
+	"github.com/Assetsadapter/steem-adapter/txsigner"
+	"github.com/blocktree/go-owcrypt"
 	"strings"
 	"time"
-
-	"github.com/Assetsadapter/steem-adapter/addrdec"
 
 	"github.com/Assetsadapter/steem-adapter/txencoder"
 	"github.com/juju/errors"
 
-	"github.com/Assetsadapter/steem-adapter/txsigner"
-	"github.com/blocktree/go-owcrypt"
 	"github.com/blocktree/openwallet/openwallet"
 	"github.com/shopspring/decimal"
 )
@@ -159,8 +159,15 @@ func (decoder *TransactionDecoder) SignRawTransaction(wrapper openwallet.WalletD
 			if err != nil {
 				return err
 			}
+			wifPriKey = "P" + wifPriKey
 
 			rolePriKey, err := addrdec.CalculateAccountRolePrivateKey(strings.Split(rawTx.TxFrom[0], ":")[0], "active", wifPriKey)
+			//wifActivePriKey, err := decoder.wm.Decoder.PrivateKeyToWIF(rolePriKey, false)
+			//pkAcitveByte,_ := decoder.wm.Decoder.WIFToPrivateKey(wifActivePriKey,false)
+			//decoder.wm.Log.Debug("hexActivePriKey:",hex.EncodeToString(rolePriKey))
+
+			//decoder.wm.Log.Debug("wifActivePriKey:", wifActivePriKey)
+
 			if err != nil {
 				return err
 			}
@@ -173,17 +180,11 @@ func (decoder *TransactionDecoder) SignRawTransaction(wrapper openwallet.WalletD
 			decoder.wm.Log.Debug("hash:", hash)
 
 			sig, err := txsigner.Default.SignTransactionHash(hash, rolePriKey, keySignature.EccType)
-			if err != nil {
-				return fmt.Errorf("sign transaction hash failed, unexpected err: %v", err)
-			}
 
 			keySignature.Signature = hex.EncodeToString(sig)
 
-			compPubKey, ret := owcrypt.GenPubkey(rolePriKey, keySignature.EccType)
-			if ret != owcrypt.SUCCESS {
-				return fmt.Errorf("Signature GenPubKey failed code : %d", ret)
-			}
-			keySignature.Address.PublicKey = hex.EncodeToString(compPubKey)
+			pubKey := owcrypt.Point_mulBaseG(rolePriKey, keySignature.EccType)
+			keySignature.Address.PublicKey = hex.EncodeToString(pubKey)
 		}
 	}
 
@@ -222,9 +223,9 @@ func (decoder *TransactionDecoder) VerifyRawTransaction(wrapper openwallet.Walle
 			publicKey, _ := hex.DecodeString(keySignature.Address.PublicKey)
 
 			//验证签名，解压公钥，解压后首字节04要去掉
-			//uncompessedPublicKey := owcrypt.PointDecompress(publicKey, decoder.wm.CurveType())
+			uncompessedPublicKey := owcrypt.PointDecompress(publicKey, decoder.wm.CurveType())
 
-			valid, compactSig, err := txsigner.Default.VerifyAndCombineSignature(messsage, publicKey, signature)
+			valid, compactSig, err := txsigner.Default.VerifyAndCombineSignature(messsage, uncompessedPublicKey[1:], signature)
 			if !valid {
 				return fmt.Errorf("transaction verify failed: %v", err)
 			}
@@ -235,6 +236,8 @@ func (decoder *TransactionDecoder) VerifyRawTransaction(wrapper openwallet.Walle
 				*tx.Signatures,
 				compactSig,
 			)
+			decoder.wm.Log.Info("Sig : %s", hex.EncodeToString(signature))
+			decoder.wm.Log.Info("compactSig : %s", hex.EncodeToString(compactSig))
 		}
 	}
 
@@ -491,18 +494,23 @@ func (decoder *TransactionDecoder) createRawTransaction(
 	if err != nil {
 		return openwallet.Errorf(openwallet.ErrCreateRawTransactionFailed, "GetBlockchainInfo")
 	}
-
+	lastBlock, err := decoder.wm.Api.GetBlockByHeight(uint32(info.LastIrreversibleBlockNum))
+	blockIdByteArray, err := hex.DecodeString(lastBlock.BlockID)
+	if err != nil {
+		return openwallet.Errorf(openwallet.ErrCreateRawTransactionFailed, "GetBlockchainInfo")
+	}
+	binary.LittleEndian.Uint32(blockIdByteArray[8:16])
 	tx := txencoder.RawTransaction{
-		RefBlockNum:    uint16(info.HeadBlockNum & 0xFFFF),
-		RefBlockPrefix: info.HeadBlockID[8:16],
+		RefBlockNum:    uint16(lastBlock.Height & 0xFFFF),
+		RefBlockPrefix: binary.LittleEndian.Uint32(blockIdByteArray[4:8]),
 		Operations:     &[]txencoder.RawOperation{},
-		Expiration:     time.Now().Add(300 * time.Second),
+		Expiration:     time.Now().UTC().Add(300 * time.Second),
 		Extensions:     &[]txencoder.Extension{},
 		Signatures:     &[]string{},
 	}
-
 	*tx.Operations = append(*tx.Operations, ops)
-
+	//data := binary.BigEndian.Uint64(*tx.RefBlockPrefix)
+	//fmt.Println(data)
 	signTx, err := tx.Encode()
 	if err != nil {
 		return openwallet.Errorf(openwallet.ErrCreateRawTransactionFailed, "Encode tx error : %v", err)

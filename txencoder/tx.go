@@ -1,6 +1,7 @@
 package txencoder
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -45,15 +46,15 @@ type Transaction struct {
 
 type Signature []byte
 
-func newEmptyTransaction(refBlockNum uint16, expiration time.Time, refBlockPrefix string, ops *[]RawOperation) (*Transaction, error) {
+func newEmptyTransaction(refBlockNum uint16, expiration time.Time, refBlockPrefix uint32, ops *[]RawOperation) (*Transaction, error) {
 	result := &Transaction{}
 	result.RefBlockNum = uint16ToLittleEndianBytes(refBlockNum)
-	refPrefix, err := hex.DecodeString(refBlockPrefix)
-	if err != nil {
-		log.Errorf("Reverse ref block prefix failed : %s", err.Error())
-		return nil, err
-	}
-	result.RefBlockPrefix = refPrefix
+	//refPrefix, err := hex.DecodeString(refBlockPrefix)
+	//if err != nil {
+	//	log.Errorf("Reverse ref block prefix failed : %s", err.Error())
+	//	return nil, err
+	//}
+	result.RefBlockPrefix = uint32ToLittleEndianBytes(refBlockPrefix)
 	result.Expiration = uint32ToLittleEndianBytes(uint32(expiration.Unix()))
 	binOps := []Operation{}
 	for _, op := range *ops {
@@ -68,6 +69,22 @@ func newEmptyTransaction(refBlockNum uint16, expiration time.Time, refBlockPrefi
 	result.Extensions = &[]Extension{}
 	result.Signatures = &[]Signature{}
 	return result, nil
+}
+func (tx *Transaction) EncodeForSign() *[]byte {
+	bytesData := []byte{}
+	bytesData = append(bytesData, tx.RefBlockNum...)
+	bytesData = append(bytesData, tx.RefBlockPrefix...)
+	bytesData = append(bytesData, tx.Expiration...)
+	bytesData = append(bytesData, byte(len(*tx.Operations)))
+	if len(*tx.Operations) > 0 {
+		for _, op := range *tx.Operations {
+			opEncode := op.(TxEncoder)
+			bytesData = append(bytesData, *opEncode.Encode()...)
+		}
+	}
+	bytesData = append(bytesData, byte(len(*tx.Extensions)))
+
+	return &bytesData
 }
 
 func (tx *Transaction) Encode() *[]byte {
@@ -141,7 +158,7 @@ func (tx *Transaction) Decode(offset int, data []byte) (int, error) {
 func (tx *Transaction) DecodeRaw() interface{} {
 	ret := RawTransaction{
 		RefBlockNum:    littleEndianBytesToUint16(tx.RefBlockNum),
-		RefBlockPrefix: hex.EncodeToString(tx.RefBlockPrefix),
+		RefBlockPrefix: littleEndianBytesToUint32(tx.RefBlockPrefix),
 		Expiration:     time.Unix(int64(littleEndianBytesToUint64(tx.Expiration)), 0),
 	}
 	rawOps := []RawOperation{}
@@ -158,21 +175,22 @@ func (tx Transaction) Digest(chainId string) ([]byte, error) {
 		return nil, fmt.Errorf("Chain id not by empty ")
 	}
 
-	writer := sha256.New()
+	var msgBuffer bytes.Buffer
 	rawChainID, err := hex.DecodeString(chainId)
 	if err != nil {
 		return nil, errors.Annotatef(err, "failed to decode chain ID: %v", chainId)
 	}
 
-	if _, err := writer.Write(rawChainID); err != nil {
+	if _, err := msgBuffer.Write(rawChainID); err != nil {
 		return nil, errors.Annotate(err, "Write [chainID]")
 	}
-
-	rawTrx := tx.Encode()
-	if _, err := writer.Write(*rawTrx); err != nil {
+	rawTrx := tx.EncodeForSign()
+	log.Error("tx byte: ", rawTrx)
+	if _, err := msgBuffer.Write(*rawTrx); err != nil {
 		return nil, errors.Annotate(err, "Write [trx]")
 	}
 
-	digest := writer.Sum(nil)
+	digest := sha256.Sum256(msgBuffer.Bytes())
+
 	return digest[:], nil
 }

@@ -68,6 +68,8 @@ type WalletConfig struct {
 	DataDir        string
 	MemoPrivateKey string
 	ChainId        string // 链id
+	IsTestNet      bool   //是否测试网
+
 }
 
 func NewConfig(symbol string) *WalletConfig {

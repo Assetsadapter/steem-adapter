@@ -39,7 +39,7 @@ func (decoder *addressDecoder) PrivateKeyToWIF(priv []byte, isTestnet bool) (str
 
 //PublicKeyToAddress 公钥转地址
 func (decoder *addressDecoder) PublicKeyToAddress(pub []byte, isTestnet bool) (string, error) {
-	address, err := addrdec.Default.AddressEncode(pub, addrdec.Default.IsTestNet)
+	address, err := addrdec.Default.AddressEncode(pub, decoder.wm.Config.IsTestNet)
 	return address, err
 }
 
@@ -50,7 +50,8 @@ func (decoder *addressDecoder) RedeemScriptToAddress(pubs [][]byte, required uin
 
 //WIFToPrivateKey WIF转私钥
 func (decoder *addressDecoder) WIFToPrivateKey(wif string, isTestnet bool) ([]byte, error) {
-	priv, err := addrdec.Default.AddressDecode(wif)
+	priv, err := addressEncoder.AddressDecode(wif, addrdec.STM_PrivateWIF)
+	//priv, err := addrdec.Default.AddressDecode(wif)
 	if err != nil {
 		return nil, err
 	}
