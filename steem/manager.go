@@ -16,10 +16,12 @@
 package steem
 
 import (
+	"fmt"
+
 	"github.com/Assetsadapter/steem-adapter/addrdec"
+	"github.com/astaxie/beego/config"
 	"github.com/blocktree/openwallet/log"
 	"github.com/blocktree/openwallet/openwallet"
-	"github.com/denkhaus/bitshares/config"
 )
 
 type WalletManager struct {
@@ -32,7 +34,7 @@ type WalletManager struct {
 	TxDecoder       openwallet.TransactionDecoder   //交易单编码器
 	Log             *log.OWLogger                   //日志工具
 	ContractDecoder openwallet.SmartContractDecoder //智能合约解析器
-	Blockscanner    *BtsBlockScanner                //区块扫描器
+	Blockscanner    *StmBlockScanner                //区块扫描器
 	CacheManager    openwallet.ICacheManager        //缓存管理器
 	WebsocketAPI    string                          //steem WebsocketAPI
 	ChainId         string
@@ -44,26 +46,13 @@ func NewWalletManager(cacheManager openwallet.ICacheManager) *WalletManager {
 	wm.Api = NewWalletClient(wm.Config.ServerAPI, wm.Config.WalletAPI, false)
 	wm.Blockscanner = NewBlockScanner(&wm)
 	wm.Decoder = NewAddressDecoder(&wm)
-	wm.DecoderV2 = addrdec.NewAddressDecoderV2()
+	conf, _ := config.NewConfig("ini", fmt.Sprintf("conf/%s.ini", Symbol))
+	isTestNet, _ := conf.Bool("isTestNet")
+	wm.DecoderV2 = addrdec.NewAddressDecoderV2(isTestNet)
 	wm.TxDecoder = NewTransactionDecoder(&wm)
 	wm.Log = log.NewOWLogger(wm.Symbol())
 	wm.CacheManager = cacheManager
 	wm.ContractDecoder = NewContractDecoder(&wm)
 
-	//wm.WebsocketAPI = NewWebsocketAPI(wm.Config.ServerWS)
-	privateNetConfig := config.ChainConfig{
-		Name:      "private_net",
-		CoreAsset: "CORE",
-		Prefix:    "STM",
-		ID:        "08c5839c0f1c1a0acae7f2e33978a21168b2c1b5f78059f902bc0c3977fff163",
-	}
-	config.Add(privateNetConfig)
-	config.SetCurrent("08c5839c0f1c1a0acae7f2e33978a21168b2c1b5f78059f902bc0c3977fff163")
-
 	return &wm
 }
-
-//func NewWebsocketAPI(api string) bitshares.WebsocketAPI {
-//	config.SetCurrent(config.ChainIDBTS)
-//	return bitshares.NewWebsocketAPI(api)
-//}

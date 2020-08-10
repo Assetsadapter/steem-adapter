@@ -49,16 +49,14 @@ func TestAddressDecoderV2_AddressDecode(t *testing.T) {
 }
 
 func TestCalculateAccountRolePrivateKey(t *testing.T) {
-	//tagetActivePrivateKey := "bebfaedefcca779bcbc042b37f6212988c1e1fd1e38ef9e6f8cf061065967e64"
-	accountName := "exx-withdraw"
-	password := "5KQ3aSN53ci5QQEn8ebm8MK9fQ6ra5JZ6VaaBrf1c8wu7FR3QKX"
+	accountName := ""
+	password := ""
 	rolesMap := map[string]string{
 		"owner":   "",
 		"active":  "",
 		"posting": "",
 		"memo":    "",
 	}
-	Default.IsTestNet = true
 	for k, _ := range rolesMap {
 		priKey, err := CalculateAccountRolePrivateKey(accountName, k, password)
 		if err != nil {

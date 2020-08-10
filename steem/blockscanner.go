@@ -36,8 +36,8 @@ const (
 	maxExtractingSize = 10 // thread count
 )
 
-//BtsBlockScanner BTS block scanner
-type BtsBlockScanner struct {
+//StmBlockScanner BTS block scanner
+type StmBlockScanner struct {
 	*openwallet.BlockScannerBase
 
 	CurrentBlockHeight   uint64         //当前区块高度
@@ -65,8 +65,8 @@ type SaveResult struct {
 }
 
 // NewBlockScanner create a block scanner
-func NewBlockScanner(wm *WalletManager) *BtsBlockScanner {
-	bs := BtsBlockScanner{
+func NewBlockScanner(wm *WalletManager) *StmBlockScanner {
+	bs := StmBlockScanner{
 		BlockScannerBase: openwallet.NewBlockScannerBase(),
 	}
 
@@ -82,7 +82,7 @@ func NewBlockScanner(wm *WalletManager) *BtsBlockScanner {
 }
 
 // ScanBlockTask scan block task
-func (bs *BtsBlockScanner) ScanBlockTask() {
+func (bs *StmBlockScanner) ScanBlockTask() {
 
 	var (
 		currentHeight uint32
@@ -199,20 +199,20 @@ func (bs *BtsBlockScanner) ScanBlockTask() {
 }
 
 //newBlockNotify 获得新区块后，通知给观测者
-func (bs *BtsBlockScanner) forkBlockNotify(block *Block) {
+func (bs *StmBlockScanner) forkBlockNotify(block *Block) {
 	header := ParseHeader(block)
 	header.Fork = true
 	bs.NewBlockNotify(header)
 }
 
 //newBlockNotify 获得新区块后，通知给观测者
-func (bs *BtsBlockScanner) newBlockNotify(block *Block) {
+func (bs *StmBlockScanner) newBlockNotify(block *Block) {
 	header := ParseHeader(block)
 	bs.NewBlockNotify(header)
 }
 
 // BatchExtractTransactions 批量提取交易单
-func (bs *BtsBlockScanner) BatchExtractTransactions(blockHeight uint64, blockHash string, blockTime int64, transactions []*types.Transaction, txIDs []string) error {
+func (bs *StmBlockScanner) BatchExtractTransactions(blockHeight uint64, blockHash string, blockTime int64, transactions []*types.Transaction, txIDs []string) error {
 
 	var (
 		quit       = make(chan struct{})
@@ -297,7 +297,7 @@ func (bs *BtsBlockScanner) BatchExtractTransactions(blockHeight uint64, blockHas
 }
 
 //extractRuntime 提取运行时
-func (bs *BtsBlockScanner) extractRuntime(producer chan ExtractResult, worker chan ExtractResult, quit chan struct{}) {
+func (bs *StmBlockScanner) extractRuntime(producer chan ExtractResult, worker chan ExtractResult, quit chan struct{}) {
 
 	var (
 		values = make([]ExtractResult, 0)
@@ -326,7 +326,7 @@ func (bs *BtsBlockScanner) extractRuntime(producer chan ExtractResult, worker ch
 }
 
 // ExtractTransaction 提取交易单
-func (bs *BtsBlockScanner) ExtractTransaction(blockHeight uint64, blockHash string, blockTime int64, transaction *types.Transaction, scanTargetFunc openwallet.BlockScanTargetFunc) ExtractResult {
+func (bs *StmBlockScanner) ExtractTransaction(blockHeight uint64, blockHash string, blockTime int64, transaction *types.Transaction, scanTargetFunc openwallet.BlockScanTargetFunc) ExtractResult {
 	var (
 		success = true
 		result  = ExtractResult{
@@ -397,7 +397,7 @@ func (bs *BtsBlockScanner) ExtractTransaction(blockHeight uint64, blockHash stri
 }
 
 //InitExtractResult optType = 0: 输入输出提取，1: 输入提取，2：输出提取
-func (bs *BtsBlockScanner) InitExtractResult(sourceKey string, operation *types.Op, result *ExtractResult, optType int64) {
+func (bs *StmBlockScanner) InitExtractResult(sourceKey string, operation *types.Op, result *ExtractResult, optType int64) {
 
 	txExtractDataArray := result.extractData[sourceKey]
 	if txExtractDataArray == nil {
@@ -525,7 +525,7 @@ func (bs *BtsBlockScanner) InitExtractResult(sourceKey string, operation *types.
 }
 
 //extractTxInput 提取交易单输入部分,无需手续费，所以只包含1个TxInput
-func (bs *BtsBlockScanner) extractTxInput(operation *types.Op, txExtractData *openwallet.TxExtractData) {
+func (bs *StmBlockScanner) extractTxInput(operation *types.Op, txExtractData *openwallet.TxExtractData) {
 
 	tx := txExtractData.Transaction
 	coin := openwallet.Coin(tx.Coin)
@@ -568,7 +568,7 @@ func (bs *BtsBlockScanner) extractTxInput(operation *types.Op, txExtractData *op
 }
 
 //extractTxOutput 提取交易单输入部分,只有一个TxOutPut
-func (bs *BtsBlockScanner) extractTxOutput(operation *types.Op, txExtractData *openwallet.TxExtractData) {
+func (bs *StmBlockScanner) extractTxOutput(operation *types.Op, txExtractData *openwallet.TxExtractData) {
 
 	tx := txExtractData.Transaction
 	coin := openwallet.Coin(tx.Coin)
@@ -598,7 +598,7 @@ func (bs *BtsBlockScanner) extractTxOutput(operation *types.Op, txExtractData *o
 }
 
 //newExtractDataNotify 发送通知
-func (bs *BtsBlockScanner) newExtractDataNotify(
+func (bs *StmBlockScanner) newExtractDataNotify(
 	height uint64,
 	extractData map[string][]*openwallet.TxExtractData) error {
 	for o := range bs.Observers {
@@ -624,7 +624,7 @@ func (bs *BtsBlockScanner) newExtractDataNotify(
 }
 
 //ScanBlock 扫描指定高度区块
-func (bs *BtsBlockScanner) ScanBlock(height uint64) error {
+func (bs *StmBlockScanner) ScanBlock(height uint64) error {
 
 	block, err := bs.scanBlock(height)
 	if err != nil {
@@ -637,7 +637,7 @@ func (bs *BtsBlockScanner) ScanBlock(height uint64) error {
 	return nil
 }
 
-func (bs *BtsBlockScanner) scanBlock(height uint64) (*Block, error) {
+func (bs *StmBlockScanner) scanBlock(height uint64) (*Block, error) {
 
 	block, err := bs.wm.Api.GetBlockByHeight(uint32(height))
 	if err != nil {
@@ -661,7 +661,7 @@ func (bs *BtsBlockScanner) scanBlock(height uint64) (*Block, error) {
 }
 
 //SetRescanBlockHeight 重置区块链扫描高度
-func (bs *BtsBlockScanner) SetRescanBlockHeight(height uint64) error {
+func (bs *StmBlockScanner) SetRescanBlockHeight(height uint64) error {
 	if height <= 0 {
 		return errors.New("block height to rescan must greater than 0. ")
 	}
@@ -677,7 +677,7 @@ func (bs *BtsBlockScanner) SetRescanBlockHeight(height uint64) error {
 }
 
 // GetGlobalMaxBlockHeight GetGlobalMaxBlockHeight
-func (bs *BtsBlockScanner) GetGlobalMaxBlockHeight() uint64 {
+func (bs *StmBlockScanner) GetGlobalMaxBlockHeight() uint64 {
 	headBlock, err := bs.GetGlobalHeadBlock()
 	if err != nil {
 		bs.wm.Log.Std.Info("get global head block error;unexpected error:%v", err)
@@ -687,7 +687,7 @@ func (bs *BtsBlockScanner) GetGlobalMaxBlockHeight() uint64 {
 }
 
 //GetGlobalHeadBlock GetGlobalHeadBlock
-func (bs *BtsBlockScanner) GetGlobalHeadBlock() (block *Block, err error) {
+func (bs *StmBlockScanner) GetGlobalHeadBlock() (block *Block, err error) {
 	infoResp, err := bs.GetChainInfo()
 	if err != nil {
 		bs.wm.Log.Std.Info("get chain info error;unexpected error:%v", err)
@@ -704,7 +704,7 @@ func (bs *BtsBlockScanner) GetGlobalHeadBlock() (block *Block, err error) {
 }
 
 //GetChainInfo GetChainInfo
-func (bs *BtsBlockScanner) GetChainInfo() (infoResp *BlockchainInfo, err error) {
+func (bs *StmBlockScanner) GetChainInfo() (infoResp *BlockchainInfo, err error) {
 	infoResp, err = bs.wm.Api.GetBlockchainInfo()
 	if err != nil {
 		bs.wm.Log.Std.Info("block scanner can not get info; unexpected error:%v", err)
@@ -713,13 +713,13 @@ func (bs *BtsBlockScanner) GetChainInfo() (infoResp *BlockchainInfo, err error) 
 }
 
 //GetScannedBlockHeight 获取已扫区块高度
-func (bs *BtsBlockScanner) GetScannedBlockHeight() uint64 {
+func (bs *StmBlockScanner) GetScannedBlockHeight() uint64 {
 	height, _, _ := bs.GetLocalBlockHead()
 	return uint64(height)
 }
 
 //GetBalanceByAddress 查询地址余额
-func (bs *BtsBlockScanner) GetBalanceByAddress(address ...string) ([]*openwallet.Balance, error) {
+func (bs *StmBlockScanner) GetBalanceByAddress(address ...string) ([]*openwallet.Balance, error) {
 
 	addrBalanceArr := make([]*openwallet.Balance, 0)
 	var contract = openwallet.SmartContract{
@@ -741,7 +741,7 @@ func (bs *BtsBlockScanner) GetBalanceByAddress(address ...string) ([]*openwallet
 	return addrBalanceArr, nil
 }
 
-func (bs *BtsBlockScanner) GetCurrentBlockHeader() (*openwallet.BlockHeader, error) {
+func (bs *StmBlockScanner) GetCurrentBlockHeader() (*openwallet.BlockHeader, error) {
 	infoResp, err := bs.GetChainInfo()
 	if err != nil {
 		bs.wm.Log.Std.Info("get chain info error;unexpected error:%v", err)
@@ -751,7 +751,7 @@ func (bs *BtsBlockScanner) GetCurrentBlockHeader() (*openwallet.BlockHeader, err
 }
 
 //rescanFailedRecord 重扫失败记录
-func (bs *BtsBlockScanner) RescanFailedRecord() {
+func (bs *StmBlockScanner) RescanFailedRecord() {
 
 	var (
 		blockMap = make(map[uint64][]string)

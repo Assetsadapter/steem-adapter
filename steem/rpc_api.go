@@ -262,7 +262,7 @@ func (c *WalletClient) GetAssetsBalance(account types.ObjectID, asset types.Obje
 	return NewBalance(r), nil
 }
 
-// GetAssetsBalance Returns information about the given account.
+// lockup_account_names Returns information about the given account.
 func (c *WalletClient) GetAccountID(name string) (*types.ObjectID, error) {
 	r, err := c.call("condenser_api.lookup_account_names", []interface{}{[]interface{}{name}}, false, false)
 	if err != nil {

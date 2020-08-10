@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/blocktree/go-owcrypt"
-
 	"github.com/blocktree/openwallet/openwallet"
 
 	"github.com/blocktree/go-owcdrivers/addressEncoder"
@@ -22,7 +21,7 @@ var (
 	STM_PrivateWIF           = addressEncoder.AddressType{"base58", addressEncoder.BTCAlphabet, "doubleSHA256", "", 32, []byte{0x80}, nil}
 	STM_PrivateWIFCompressed = addressEncoder.AddressType{"base58", addressEncoder.BTCAlphabet, "doubleSHA256", "", 32, []byte{0x80}, []byte{0x01}}
 
-	Default = AddressDecoderV2{IsTestNet: true}
+	Default = AddressDecoderV2{}
 )
 
 //AddressDecoderV2
@@ -32,8 +31,10 @@ type AddressDecoderV2 struct {
 }
 
 //NewAddressDecoder 地址解析器
-func NewAddressDecoderV2() *AddressDecoderV2 {
-	decoder := AddressDecoderV2{}
+func NewAddressDecoderV2(isTestNet bool) *AddressDecoderV2 {
+	decoder := AddressDecoderV2{
+		IsTestNet:isTestNet,
+	}
 	return &decoder
 }
 
@@ -60,8 +61,7 @@ func (dec *AddressDecoderV2) AddressDecode(pubKey string, opts ...interface{}) (
 // AddressEncode encode address
 func (dec *AddressDecoderV2) AddressEncode(hash []byte, opts ...interface{}) (string, error) {
 	pubType := STM_mainnetPublic
-	isTestNet := (opts[0]).(bool)
-	if isTestNet {
+	if dec.IsTestNet {
 		pubType = STM_testnetPublic
 	}
 	data := addressEncoder.CatData(hash, addressEncoder.CalcChecksum(hash, pubType.ChecksumType))
@@ -85,13 +85,8 @@ func CalculateAccountRolePrivateKey(accountName, role, password string) ([]byte,
 	if 0 == len(accountName) || 0 == len(role) || 0 == len(password) {
 		return nil, fmt.Errorf("invalied args")
 	}
-	sha := sha256.New()
-	_, err := sha.Write([]byte(accountName + role + password))
-	if err != nil {
-		return nil, err
-	}
-	priKey := sha.Sum(nil)
-	return priKey, err
+	priKey := sha256.Sum256([]byte(accountName + role + password))
+	return priKey[:], nil
 }
 
 // 获取角色的压缩公钥

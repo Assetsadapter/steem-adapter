@@ -27,9 +27,7 @@ import (
 
 func TestAddressDecoder_PrivateKeyToWIF(t *testing.T) {
 	addrdec.Default.IsTestNet = false
-	// exx-exchange private key : 7eeb056aa7801f8c84ebe3dd90891f0d42f4a4451deee67fd8a43d1f9640ec13
-	// exx-exchange active role private key : 89569453d9cd2b7649b20f107c8f878cf7a6b5a0812ef0b1e4a42530b55f1a3a
-	privKey, _ := hex.DecodeString("d05958af013e4825acf787c5139f4f111e2b1c11840c9ea58490b0a1dd96efd6")
+	privKey, _ := hex.DecodeString("")
 	wif := addressEncoder.AddressEncode(privKey, addrdec.STM_PrivateWIF)
 	fmt.Println(wif)
 }

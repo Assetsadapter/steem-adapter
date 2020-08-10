@@ -58,7 +58,7 @@ func TestTransactionDecoder_SignRawTransaction(t *testing.T) {
 	}
 	rawTx := txencoder.RawTransaction{
 		RefBlockNum:    16645,
-		RefBlockPrefix: "c97878c3",
+		RefBlockPrefix: 0xc97878c3,
 		Expiration:     tv,
 		Operations:     &[]txencoder.RawOperation{&op},
 		Extensions:     &[]txencoder.Extension{},
